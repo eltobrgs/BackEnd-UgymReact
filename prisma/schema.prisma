@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  USUARIO_COMUM
+  PERSONAL
+}
+
+model User {
+  id          Int          @id @default(autoincrement())
+  email       String       @unique
+  name        String?
+  password    String
+  role        Role         @default(USUARIO_COMUM)
+  preferences Preferences?
+  personal    Personal?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Preferences {
+  id                  Int      @id @default(autoincrement())
+  birthDate           DateTime
+  gender              String
+  goal                String
+  healthCondition     String
+  experience          String
+  height              String
+  weight              String
+  activityLevel       String
+  medicalConditions   String
+  physicalLimitations String
+  userId              Int      @unique @map("user_id")
+  user                User     @relation(fields: [userId], references: [id])
+  personalId          Int?
+  personal            Personal? @relation(fields: [personalId], references: [id])
+}
+
+model Personal {
+  id                Int      @id @default(autoincrement())
+  cref              String   @unique
+  specialization    String
+  birthDate         DateTime
+  gender            String
+  specializations   String[]
+  yearsOfExperience String
+  workSchedule      String
+  certifications    String[]
+  biography         String
+  workLocation      String
+  pricePerHour      String
+  languages         String[]
+  instagram         String?
+  linkedin          String?
+  userId            Int      @unique @map("user_id")
+  user              User     @relation(fields: [userId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  students          Preferences[]
+}
+
+
+

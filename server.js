@@ -1,20 +1,20 @@
-// server.js
 import express from 'express';
 import publicRoutes from './routes/public.js';
-// import privateRoutes from './routes/private.js';
-import cors from 'cors';
+import privateRoutes from './routes/private.js';
 
 const app = express();
 
-app.use(express.json()); // Middleware que permite o uso de JSON
-app.use(cors({ origin: '*' })); // Permite requisições de qualquer origem
+// Middleware para JSON
+app.use(express.json());
 
-app.use('/', publicRoutes);
-// app.use('/', auth, privateRoutes); // Rota privada com autenticação
+// Rotas públicas
+app.use('/api', publicRoutes);
 
+// Rotas privadas
+app.use('/api', privateRoutes);
+
+// Iniciar servidor
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`http://localhost:${PORT}`);
+  console.log(`Servidor rodando na porta ${PORT}`);
 });

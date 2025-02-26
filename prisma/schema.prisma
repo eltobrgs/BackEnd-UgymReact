@@ -9,23 +9,25 @@ datasource db {
 }
 
 enum Role {
-  USUARIO_COMUM
+  ALUNO
   PERSONAL
+  ACADEMIA
 }
 
 model User {
-  id          Int          @id @default(autoincrement())
-  email       String       @unique
-  name        String?
-  password    String
-  role        Role         @default(USUARIO_COMUM)
-  preferences Preferences?
-  personal    Personal?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                 Int                 @id @default(autoincrement())
+  email              String              @unique
+  name               String?
+  password           String
+  role               Role                @default(ALUNO)
+  preferenciasAluno  PreferenciasAluno?
+  preferenciasPersonal PreferenciasPersonal?
+  academia           Academia?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 }
 
-model Preferences {
+model PreferenciasAluno {
   id                  Int      @id @default(autoincrement())
   birthDate           DateTime
   gender              String
@@ -40,10 +42,10 @@ model Preferences {
   userId              Int      @unique @map("user_id")
   user                User     @relation(fields: [userId], references: [id])
   personalId          Int?
-  personal            Personal? @relation(fields: [personalId], references: [id])
+  personal            PreferenciasPersonal? @relation(fields: [personalId], references: [id])
 }
 
-model Personal {
+model PreferenciasPersonal {
   id                Int      @id @default(autoincrement())
   cref              String   @unique
   specialization    String
@@ -63,7 +65,25 @@ model Personal {
   user              User     @relation(fields: [userId], references: [id])
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-  students          Preferences[]
+  students          PreferenciasAluno[]
+}
+
+model Academia {
+  id                Int      @id @default(autoincrement())
+  cnpj              String   @unique
+  endereco          String
+  telefone          String
+  horarioFuncionamento String
+  descricao         String
+  comodidades       String[]
+  planos            String[]
+  website           String?
+  instagram         String?
+  facebook          String?
+  userId            Int      @unique @map("user_id")
+  user              User     @relation(fields: [userId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 

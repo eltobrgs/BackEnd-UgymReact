@@ -42,6 +42,20 @@ router.post("/cadastro", async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hash = await bcrypt.hash(user.password, salt);
 
+    // Verificar se foi enviado um ID de academia (para associação)
+    const academiaId = user.academiaId ? parseInt(user.academiaId) : null;
+    
+    // Se academiaId foi fornecido, verificar se a academia existe
+    if (academiaId) {
+      const academia = await prisma.academia.findUnique({
+        where: { id: academiaId }
+      });
+      
+      if (!academia) {
+        return res.status(400).json({ error: "Academia não encontrada" });
+      }
+    }
+
     // Salvar usuário no banco de dados
     const savedUser = await prisma.user.create({
       data: {
@@ -60,7 +74,8 @@ router.post("/cadastro", async (req, res) => {
             weight: "Não informado",
             activityLevel: "",
             medicalConditions: "",
-            physicalLimitations: ""
+            physicalLimitations: "",
+            academiaId: academiaId
           }
         }
       },
@@ -91,7 +106,7 @@ router.post("/cadastro", async (req, res) => {
 // Cadastro de personal trainer
 router.post("/cadastro-personal", async (req, res) => {
   try {
-    const { name, email, password, cref, specialization } = req.body;
+    const { name, email, password, cref, specialization, academiaId } = req.body;
 
     // Verificar se o CREF já existe
     const existingCref = await prisma.preferenciasPersonal.findUnique({
@@ -100,6 +115,19 @@ router.post("/cadastro-personal", async (req, res) => {
 
     if (existingCref) {
       return res.status(400).json({ error: "CREF já cadastrado" });
+    }
+
+    // Verificar se academia existe quando academiaId é fornecido
+    let academiaIdParsed = null;
+    if (academiaId) {
+      academiaIdParsed = parseInt(academiaId);
+      const academia = await prisma.academia.findUnique({
+        where: { id: academiaIdParsed }
+      });
+      
+      if (!academia) {
+        return res.status(400).json({ error: "Academia não encontrada" });
+      }
     }
 
     // Gerar hash da senha
@@ -126,7 +154,8 @@ router.post("/cadastro-personal", async (req, res) => {
             biography: "",
             workLocation: "",
             pricePerHour: "",
-            languages: []
+            languages: [],
+            academiaId: academiaIdParsed
           }
         }
       },
@@ -257,7 +286,19 @@ router.post("/login", async (req, res) => {
 // Listar todos os personais (acesso público)
 router.get("/personals", async (req, res) => {
   try {
+    // Verificar se foi solicitado filtragem por academia
+    const { academiaId } = req.query;
+    console.log('Parâmetro academiaId recebido:', academiaId);
+    
+    // Preparar o filtro baseado na academia (se fornecido)
+    const whereClause = academiaId
+      ? { academiaId: parseInt(academiaId) }
+      : {};
+    
+    console.log('Where clause construída:', whereClause);
+      
     const personals = await prisma.preferenciasPersonal.findMany({
+      where: whereClause,
       include: {
         user: {
           select: {
@@ -269,6 +310,8 @@ router.get("/personals", async (req, res) => {
       }
     });
 
+    console.log(`Encontrados ${personals.length} personais`);
+
     // Formatar a resposta para manter a mesma estrutura
     const formattedPersonals = personals.map(personal => ({
       id: personal.userId,
@@ -278,6 +321,8 @@ router.get("/personals", async (req, res) => {
       specialization: personal.specialization,
       // Incluir outros campos necessários
     }));
+
+    console.log('Resposta formatada:', formattedPersonals);
 
     res.status(200).json(formattedPersonals);
   } catch (err) {

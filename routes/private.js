@@ -64,7 +64,8 @@ router.post("/preferences", async (req, res) => {
       weight, 
       activityLevel, 
       medicalConditions, 
-      physicalLimitations 
+      physicalLimitations,
+      academiaId
     } = req.body;
 
     // Verificar e converter a data
@@ -84,6 +85,19 @@ router.post("/preferences", async (req, res) => {
       return res.status(404).json({ error: "Usuário não encontrado" });
     }
 
+    // Verificar se academiaId é válido quando fornecido
+    let academiaIdParsed = null;
+    if (academiaId) {
+      academiaIdParsed = parseInt(academiaId);
+      const academia = await prisma.academia.findUnique({
+        where: { id: academiaIdParsed }
+      });
+      
+      if (!academia) {
+        return res.status(400).json({ error: "Academia não encontrada" });
+      }
+    }
+
     // Verificar se já existem preferências
     const existingPreferences = await prisma.preferenciasAluno.findUnique({
       where: { userId: user.id },
@@ -101,7 +115,7 @@ router.post("/preferences", async (req, res) => {
       activityLevel,
       medicalConditions,
       physicalLimitations,
-      userId: user.id,
+      academiaId: academiaIdParsed
     };
 
     let preferences;
@@ -117,6 +131,7 @@ router.post("/preferences", async (req, res) => {
       preferences = await prisma.preferenciasAluno.create({
         data: {
           ...preferencesData,
+          userId: user.id,
         },
       });
     }
@@ -182,7 +197,8 @@ router.post("/personal-preferences", async (req, res) => {
       pricePerHour,
       languages,
       instagram,
-      linkedin
+      linkedin,
+      academiaId
     } = req.body;
 
     // Verificar e converter a data
@@ -203,6 +219,19 @@ router.post("/personal-preferences", async (req, res) => {
       return res.status(403).json({ error: "Acesso negado. Apenas personal trainers podem acessar esta funcionalidade" });
     }
 
+    // Verificar se academiaId é válido quando fornecido
+    let academiaIdParsed = null;
+    if (academiaId) {
+      academiaIdParsed = parseInt(academiaId);
+      const academia = await prisma.academia.findUnique({
+        where: { id: academiaIdParsed }
+      });
+      
+      if (!academia) {
+        return res.status(400).json({ error: "Academia não encontrada" });
+      }
+    }
+
     // Dados a serem salvos/atualizados
     const personalData = {
       cref,
@@ -219,6 +248,7 @@ router.post("/personal-preferences", async (req, res) => {
         languages,
         instagram,
       linkedin,
+      academiaId: academiaIdParsed
     };
 
     // Atualizar dados do personal
@@ -289,10 +319,42 @@ router.get("/my-students", async (req, res) => {
 // Listar todos os alunos (para personal)
 router.get("/all-students", async (req, res) => {
   try {
-    // Buscar todos os alunos
+    // Buscar o usuário logado
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: {
+        preferenciasPersonal: true,
+        academia: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
+
+    let academiaId = null;
+
+    // Verificar o tipo de usuário para definir o filtro por academia
+    if (user.role === 'ACADEMIA') {
+      // Se for academia, busca os alunos desta academia
+      academiaId = user.academia?.id;
+    } else if (user.role === 'PERSONAL') {
+      // Se for personal, busca os alunos da academia à qual ele pertence
+      academiaId = user.preferenciasPersonal?.academiaId;
+    }
+
+    // Montar o filtro de busca baseado na academia (se aplicável)
+    const whereClause = academiaId 
+      ? { academiaId } 
+      : {};
+
+    // Buscar todos os alunos com filtro
     const students = await prisma.user.findMany({
       where: {
         role: 'ALUNO',
+        preferenciasAluno: {
+          ...whereClause
+        }
       },
       include: {
         preferenciasAluno: true
@@ -424,44 +486,6 @@ router.get("/personal/:personalId", async (req, res) => {
   } catch (err) {
     console.error("Erro ao buscar dados do personal:", err);
     res.status(500).json({ error: "Erro ao buscar dados do personal" });
-  }
-});
-
-// Listar todos os personals
-router.get("/personals", async (req, res) => {
-  try {
-    // Buscar todos os personals
-    const personals = await prisma.user.findMany({
-      where: {
-        role: 'PERSONAL',
-      },
-      include: {
-        preferenciasPersonal: true
-      }
-    });
-
-    // Formatar dados para exibição
-    const formattedPersonals = personals.map(personal => {
-      const age = personal.preferenciasPersonal?.birthDate
-        ? Math.floor((new Date() - new Date(personal.preferenciasPersonal.birthDate)) / (1000 * 60 * 60 * 24 * 365.25))
-        : null;
-
-      return {
-        id: personal.id,
-        name: personal.name,
-        email: personal.email,
-        age: age || 'Não informado',
-        weight: personal.preferenciasPersonal?.weight || 'Não informado',
-        height: personal.preferenciasPersonal?.height || 'Não informado',
-        goal: personal.preferenciasPersonal?.goal || 'Não informado',
-        trainingTime: personal.preferenciasPersonal?.experience || 'Iniciante'
-      };
-    });
-
-    res.status(200).json(formattedPersonals);
-  } catch (err) {
-    console.error("Erro ao buscar personals:", err);
-    res.status(500).json({ error: "Erro ao buscar personals" });
   }
 });
 
@@ -597,7 +621,9 @@ router.get("/academia/:academiaId", async (req, res) => {
 
     // Buscar academia
     const academia = await prisma.academia.findUnique({
-      where: { userId: parseInt(academiaId) },
+      where: { 
+        id: parseInt(academiaId) 
+      },
       include: {
         user: {
           select: {

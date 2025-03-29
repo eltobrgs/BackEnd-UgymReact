@@ -6,7 +6,11 @@
     "dev": "bun --watch server.js",
     "start": "node server.js",
     "build": "npx prisma generate",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate": "npx prisma migrate dev",
+    "seed": "bun run scripts/seed.js",
+    "delete": "bun run scripts/deleteData.js",
+    "reset": "bun run scripts/deleteData.js && bun run scripts/seed.js"
   },
   "keywords": [],
   "author": "",

@@ -45,6 +45,8 @@ model PreferenciasAluno {
   personal            PreferenciasPersonal? @relation(fields: [personalId], references: [id])
   academiaId          Int?     @map("academia_id")
   academia            Academia? @relation(fields: [academiaId], references: [id])
+  treinos             Treino[]
+  reports             Report[]
 }
 
 model PreferenciasPersonal {
@@ -70,6 +72,7 @@ model PreferenciasPersonal {
   students          PreferenciasAluno[]
   academiaId        Int?     @map("academia_id")
   academia          Academia? @relation(fields: [academiaId], references: [id])
+  reports           Report[]
 }
 
 model Academia {
@@ -90,6 +93,45 @@ model Academia {
   updatedAt         DateTime @updatedAt
   alunos            PreferenciasAluno[]
   personais         PreferenciasPersonal[]
+}
+
+model Treino {
+  id                Int         @id @default(autoincrement())
+  diaSemana         Int         // 0-6 representando Domingo a Sábado
+  alunoId           Int         @map("aluno_id")
+  aluno             PreferenciasAluno @relation(fields: [alunoId], references: [id])
+  exercicios        Exercicio[]
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model Exercicio {
+  id                Int         @id @default(autoincrement())
+  name              String
+  sets              Int
+  time              String
+  restTime          String
+  repsPerSet        Int
+  status            String      // "completed", "inprogress", "not-started"
+  image             String
+  treinoId          Int         @map("treino_id")
+  treino            Treino      @relation(fields: [treinoId], references: [id], onDelete: Cascade)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model Report {
+  id                Int         @id @default(autoincrement())
+  tipo              String      // ex: peso, IMC, medidas_braco, medidas_perna, etc
+  valor             Float       
+  data              DateTime    @default(now())
+  observacao        String?     // Campo opcional para comentários
+  alunoId           Int         @map("aluno_id")
+  aluno             PreferenciasAluno @relation(fields: [alunoId], references: [id])
+  personalId        Int?        @map("personal_id")
+  personal          PreferenciasPersonal? @relation(fields: [personalId], references: [id])
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 }
 
 

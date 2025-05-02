@@ -205,6 +205,8 @@ async function criarAlunos(academiaComPersonais) {
     'Melhora da postura'
   ];
 
+  const todosAlunos = [];
+
   for (const academiaDados of academiaComPersonais) {
     console.log(`\nAlunos da Academia ${academiaDados.academiaNome}:`);
     
@@ -251,6 +253,13 @@ async function criarAlunos(academiaComPersonais) {
           preferenciasAluno: true
         }
       });
+
+      // Adicionar o aluno à lista com os dados necessários
+      todosAlunos.push({
+        id: savedAluno.id,
+        name: savedAluno.name,
+        preferenciasId: savedAluno.preferenciasAluno.id
+      });
       
       console.log(`@aluno ${alunoInfo.nome}`);
       console.log(`- Email: ${email}`);
@@ -266,6 +275,98 @@ async function criarAlunos(academiaComPersonais) {
   }
 
   console.log('Alunos criados com sucesso!');
+  return todosAlunos;
+}
+
+async function criarTreinos(alunos) {
+  console.log("\n=== TREINOS ===");
+
+  const imagensExercicios = [
+    'data:image/png;base64,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',
+    'https://via.placeholder.com/150',
+    'https://images.unsplash.com/photo-1594737625785-a6cbdabd333c?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+    'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+    'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
+  ];
+
+  const nomeExercicios = [
+    'Forward Lunge', 'Push Up', 'Squat', 'Plank', 'Deadlift', 
+    'Burpee', 'Bench Press', 'Mountain Climber', 'Bicep Curl', 
+    'Tricep Dip', 'Yoga', 'Pull Up', 'Crunches', 'Leg Press', 'Jumping Jacks'
+  ];
+
+  const temposSeries = ['30 Sec', '45 Sec', '1 Min', '2 Min'];
+  const temposDescanso = ['30 Sec', '1 Min', '2 Min'];
+  const statusOpcoes = ['completed', 'inprogress', 'not-started'];
+
+  for (const aluno of alunos) {
+    console.log(`\nCriando treinos para o aluno: ${aluno.name}`);
+    
+    if (!aluno.preferenciasId) {
+      console.log(`- Preferências do aluno ${aluno.name} não encontradas, pulando`);
+      continue;
+    }
+
+    // Criar treinos para cada dia da semana (0-6)
+    for (let diaSemana = 0; diaSemana < 7; diaSemana++) {
+      // Domingo (0) e Sábado (6) com menos exercícios ou dia de descanso
+      const qtdExercicios = diaSemana === 0 ? 1 : diaSemana === 6 ? 1 : Math.floor(Math.random() * 3) + 1;
+
+      if (qtdExercicios > 0) {
+        const exercicios = [];
+
+        for (let i = 0; i < qtdExercicios; i++) {
+          const nomeExercicio = nomeExercicios[Math.floor(Math.random() * nomeExercicios.length)];
+          const imagemExercicio = imagensExercicios[Math.floor(Math.random() * imagensExercicios.length)];
+          const tempoSerie = temposSeries[Math.floor(Math.random() * temposSeries.length)];
+          const tempoDescanso = temposDescanso[Math.floor(Math.random() * temposDescanso.length)];
+          const status = statusOpcoes[Math.floor(Math.random() * statusOpcoes.length)];
+          const sets = Math.floor(Math.random() * 4) + 1;
+          const repsPerSet = Math.floor(Math.random() * 15) + 5;
+
+          exercicios.push({
+            name: nomeExercicio,
+            sets: sets,
+            time: tempoSerie,
+            restTime: tempoDescanso,
+            repsPerSet: repsPerSet,
+            status: status,
+            image: imagemExercicio
+          });
+        }
+
+        const treino = await prisma.treino.create({
+          data: {
+            diaSemana: diaSemana,
+            alunoId: aluno.preferenciasId,
+            exercicios: {
+              create: exercicios
+            }
+          },
+          include: {
+            exercicios: true
+          }
+        });
+
+        console.log(`- Treino para ${diaSemana === 0 ? 'Domingo' : 
+                                   diaSemana === 1 ? 'Segunda-feira' : 
+                                   diaSemana === 2 ? 'Terça-feira' : 
+                                   diaSemana === 3 ? 'Quarta-feira' : 
+                                   diaSemana === 4 ? 'Quinta-feira' : 
+                                   diaSemana === 5 ? 'Sexta-feira' : 'Sábado'} 
+                     criado com ${treino.exercicios.length} exercícios`);
+      } else {
+        console.log(`- Dia de descanso para ${diaSemana === 0 ? 'Domingo' : 
+                                          diaSemana === 1 ? 'Segunda-feira' : 
+                                          diaSemana === 2 ? 'Terça-feira' : 
+                                          diaSemana === 3 ? 'Quarta-feira' : 
+                                          diaSemana === 4 ? 'Quinta-feira' : 
+                                          diaSemana === 5 ? 'Sexta-feira' : 'Sábado'}`);
+      }
+    }
+  }
+
+  console.log('Treinos criados com sucesso!');
 }
 
 async function main() {
@@ -274,26 +375,107 @@ async function main() {
     
     const academias = await criarAcademias();
     
-    const academiasComPersonais = await criarPersonais(academias);
+    const academiaComPersonais = await criarPersonais(academias);
     
-    await criarAlunos(academiasComPersonais);
+    const alunos = await criarAlunos(academiaComPersonais);
     
-    console.log('Banco de dados populado com sucesso!');
-  } catch (error) {
-    console.error('Erro ao popular banco de dados:', error);
+    await criarTreinos(alunos);
+    
+    console.log("\n=== RESUMO ===");
+    console.log(`Academias criadas: ${academias.length}`);
+    
+    let totalPersonais = 0;
+    for (const academia of academiaComPersonais) {
+      totalPersonais += academia.personais.length;
+    }
+    console.log(`Personais criados: ${totalPersonais}`);
+    console.log(`Alunos criados: ${alunos.length}`);
+    
+    // Criar relatórios de exemplo para alunos
+    console.log('Criando relatórios de exemplo...');
+    
+    // Função para gerar uma data aleatória dentro de um intervalo
+    const randomDate = (start, end) => {
+      return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+    };
+    
+    // Buscar todos os personais
+    const personais = await prisma.preferenciasPersonal.findMany();
+    
+    // Para cada aluno, criar relatórios de diferentes tipos
+    for (const aluno of alunos) {
+      const tiposRelatorio = ['peso', 'IMC', 'medidas_braco', 'medidas_perna', 'medidas_cintura', 'gordura_corporal'];
+      const personal = personais[Math.floor(Math.random() * personais.length)];
+      
+      // Gerar datas para os últimos 3 meses
+      const hoje = new Date();
+      const tresMesesAtras = new Date();
+      tresMesesAtras.setMonth(hoje.getMonth() - 3);
+      
+      // Para cada tipo de relatório, criar 5 registros com datas diferentes
+      for (const tipo of tiposRelatorio) {
+        for (let i = 0; i < 5; i++) {
+          let valor;
+          let observacao = '';
+          
+          // Gerar valores realistas para cada tipo
+          switch (tipo) {
+            case 'peso':
+              valor = 60 + Math.random() * 40; // 60kg a 100kg
+              observacao = i === 0 ? 'Medição inicial' : `Semana ${i}`;
+              break;
+            case 'IMC':
+              valor = 18 + Math.random() * 15; // 18 a 33
+              observacao = valor < 18.5 ? 'Abaixo do peso' : 
+                          valor < 25 ? 'Peso normal' : 
+                          valor < 30 ? 'Sobrepeso' : 'Obesidade';
+              break;
+            case 'medidas_braco':
+              valor = 25 + Math.random() * 15; // 25cm a 40cm
+              break;
+            case 'medidas_perna':
+              valor = 40 + Math.random() * 20; // 40cm a 60cm
+              break;
+            case 'medidas_cintura':
+              valor = 60 + Math.random() * 40; // 60cm a 100cm
+              break;
+            case 'gordura_corporal':
+              valor = 10 + Math.random() * 25; // 10% a 35%
+              observacao = valor < 15 ? 'Atlético' : 
+                          valor < 25 ? 'Fitness' : 'Precisa melhorar';
+              break;
+          }
+          
+          // Gerar data aleatória dentro do período
+          const data = randomDate(tresMesesAtras, hoje);
+          
+          // Criar o relatório
+          await prisma.report.create({
+            data: {
+              tipo,
+              valor,
+              data,
+              observacao,
+              alunoId: aluno.preferenciasId,
+              personalId: personal.id
+            }
+          });
+        }
+      }
+    }
+    
+    console.log('Relatórios de exemplo criados com sucesso!');
+  } catch (e) {
+    console.error('Erro durante a população:', e);
   } finally {
-  await prisma.$disconnect();
+    await prisma.$disconnect();
   }
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+// Executar script
+main().catch(e => {
+  console.error(e);
+  process.exit(1);
+});
 
 
-// Executar o script com o comando: node test.js dentro da pasta routes

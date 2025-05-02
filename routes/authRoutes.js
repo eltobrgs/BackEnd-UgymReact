@@ -7,8 +7,47 @@ const router = express.Router();
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// Login
+router.post("/entrar", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Buscar usuário pelo email
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: "Email ou senha incorretos" });
+    }
+
+    // Verificar senha
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Email ou senha incorretos" });
+    }
+
+    // Gerar token JWT
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '1h' });
+
+    res.status(200).json({
+      message: "Login realizado com sucesso",
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      },
+    });
+  } catch (err) {
+    console.error("Erro ao realizar login:", err);
+    res.status(500).json({ error: "Erro ao realizar login" });
+  }
+});
+
 // Cadastro de aluno
-router.post("/cadastro", async (req, res) => {
+router.post("/aluno/cadastrar", async (req, res) => {
   try {
     const user = req.body;
     console.log("Dados do usuário recebidos:", user);
@@ -42,11 +81,12 @@ router.post("/cadastro", async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hash = await bcrypt.hash(user.password, salt);
 
-    // Verificar se foi enviado um ID de academia (para associação)
-    const academiaId = user.academiaId ? parseInt(user.academiaId) : null;
-    
-    // Se academiaId foi fornecido, verificar se a academia existe
-    if (academiaId) {
+    // Verificar e validar o ID da academia
+    let academiaId = null;
+    if (user.academiaId) {
+      academiaId = parseInt(user.academiaId);
+      
+      // Verificar se a academia existe
       const academia = await prisma.academia.findUnique({
         where: { id: academiaId }
       });
@@ -54,9 +94,13 @@ router.post("/cadastro", async (req, res) => {
       if (!academia) {
         return res.status(400).json({ error: "Academia não encontrada" });
       }
+      
+      console.log("Academia encontrada e validada:", academia.id);
+    } else {
+      console.log("Aluno cadastrado sem academia associada");
     }
 
-    // Salvar usuário no banco de dados
+    // Salvar usuário no banco de dados com associação à academia
     const savedUser = await prisma.user.create({
       data: {
         name: user.name.trim(),
@@ -84,8 +128,10 @@ router.post("/cadastro", async (req, res) => {
       }
     });
 
+    console.log("Aluno salvo com preferências:", savedUser.preferenciasAluno);
+
     // Gerar o token JWT
-    const token = jwt.sign({ userId: savedUser.id }, JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ id: savedUser.id }, JWT_SECRET, { expiresIn: '1h' });
 
     res.status(201).json({
       message: "Cadastro realizado com sucesso",
@@ -104,7 +150,7 @@ router.post("/cadastro", async (req, res) => {
 });
 
 // Cadastro de personal trainer
-router.post("/cadastro-personal", async (req, res) => {
+router.post("/personal/cadastrar", async (req, res) => {
   try {
     const { name, email, password, cref, specialization, academiaId } = req.body;
 
@@ -165,7 +211,7 @@ router.post("/cadastro-personal", async (req, res) => {
     });
 
     // Gerar o token JWT
-    const token = jwt.sign({ userId: savedUser.id }, JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ id: savedUser.id }, JWT_SECRET, { expiresIn: '1h' });
 
     res.status(201).json({
       message: "Cadastro de personal realizado com sucesso",
@@ -184,7 +230,7 @@ router.post("/cadastro-personal", async (req, res) => {
 });
 
 // Cadastro de academia
-router.post("/cadastro-academia", async (req, res) => {
+router.post("/academia/cadastrar", async (req, res) => {
   try {
     const { name, email, password, cnpj } = req.body;
 
@@ -226,7 +272,7 @@ router.post("/cadastro-academia", async (req, res) => {
     });
 
     // Gerar o token JWT
-    const token = jwt.sign({ userId: savedUser.id }, JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ id: savedUser.id }, JWT_SECRET, { expiresIn: '1h' });
 
     res.status(201).json({
       message: "Cadastro de academia realizado com sucesso",
@@ -244,120 +290,4 @@ router.post("/cadastro-academia", async (req, res) => {
   }
 });
 
-// Login
-router.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    // Buscar usuário pelo email
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-    });
-
-    if (!user) {
-      return res.status(401).json({ error: "Email ou senha incorretos" });
-    }
-
-    // Verificar senha
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ error: "Email ou senha incorretos" });
-    }
-
-    // Gerar token JWT
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1h' });
-
-    res.status(200).json({
-      message: "Login realizado com sucesso",
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      },
-    });
-  } catch (err) {
-    console.error("Erro ao realizar login:", err);
-    res.status(500).json({ error: "Erro ao realizar login" });
-  }
-});
-
-// Listar todos os personais (acesso público)
-router.get("/personals", async (req, res) => {
-  try {
-    // Verificar se foi solicitado filtragem por academia
-    const { academiaId } = req.query;
-    console.log('Parâmetro academiaId recebido:', academiaId);
-    
-    // Preparar o filtro baseado na academia (se fornecido)
-    const whereClause = academiaId
-      ? { academiaId: parseInt(academiaId) }
-      : {};
-    
-    console.log('Where clause construída:', whereClause);
-      
-    const personals = await prisma.preferenciasPersonal.findMany({
-      where: whereClause,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
-      }
-    });
-
-    console.log(`Encontrados ${personals.length} personais`);
-
-    // Formatar a resposta para manter a mesma estrutura
-    const formattedPersonals = personals.map(personal => ({
-      id: personal.userId,
-      name: personal.user.name,
-      email: personal.user.email,
-      cref: personal.cref,
-      specialization: personal.specialization,
-      // Incluir outros campos necessários
-    }));
-
-    console.log('Resposta formatada:', formattedPersonals);
-
-    res.status(200).json(formattedPersonals);
-  } catch (err) {
-    console.error("Erro ao buscar lista de personais:", err);
-    res.status(500).json({ error: "Erro ao buscar lista de personais" });
-  }
-});
-
-// Buscar dados de um personal específico (acesso público)
-router.get("/personal/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Buscar personal e seus dados básicos de usuário
-    const personal = await prisma.preferenciasPersonal.findFirst({
-      where: { userId: parseInt(id) },
-      include: {
-        user: {
-          select: {
-            name: true,
-            email: true
-          }
-        }
-      }
-    });
-
-    if (!personal) {
-      return res.status(404).json({ error: "Personal não encontrado" });
-    }
-
-    res.status(200).json(personal);
-  } catch (err) {
-    console.error("Erro ao buscar dados do personal:", err);
-    res.status(500).json({ error: "Erro ao buscar dados do personal" });
-  }
-});
-
-export default router;
+export default router; 

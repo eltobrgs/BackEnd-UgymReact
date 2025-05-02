@@ -16,7 +16,7 @@ const auth = (req, res, next) => {
         const decoded = jwt.verify(token.split(" ")[1], JWT_SECRET);
         console.log("Token decodificado:", decoded);
 
-        req.userID = decoded.id; // Adiciona informações do usuário decodificado à requisição
+        req.userId = decoded.id; // Atribui o ID do token para req.userId
 
         next(); // Chama o próximo middleware ou rota
     } catch (err) {

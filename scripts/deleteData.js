@@ -20,7 +20,9 @@ async function limparBancoDeDados() {
       }
     });
 
-    // Excluir registros na ordem correta para respeitar relações
+    // Excluir tabelas na ordem correta para respeitar relações
+    await prisma.$executeRaw`TRUNCATE TABLE "Exercicio" RESTART IDENTITY CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "Treino" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "PreferenciasAluno" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "PreferenciasPersonal" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "Academia" RESTART IDENTITY CASCADE`;

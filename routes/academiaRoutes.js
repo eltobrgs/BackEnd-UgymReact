@@ -161,4 +161,358 @@ router.get("/academia/detalhes/:academiaId", async (req, res) => {
   }
 });
 
+// ROTAS PARA GESTÃO DE EVENTOS
+
+// Listar todos os eventos da academia
+router.get("/eventos", [isAcademia], async (req, res) => {
+  try {
+    // Buscar academia do usuário logado
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: { academia: true }
+    });
+
+    if (!user.academia) {
+      return res.status(404).json({ error: "Perfil de academia não encontrado" });
+    }
+
+    // Buscar eventos da academia
+    const eventos = await prisma.evento.findMany({
+      where: { academiaId: user.academia.id },
+      orderBy: { dataInicio: 'asc' }
+    });
+
+    console.log(`Encontrados ${eventos.length} eventos para a academia ${user.academia.id}`);
+    
+    res.status(200).json(eventos);
+  } catch (err) {
+    console.error("Erro ao buscar eventos da academia:", err);
+    res.status(500).json({ error: "Erro ao buscar eventos da academia" });
+  }
+});
+
+// Criar um novo evento
+router.post("/eventos", [isAcademia], async (req, res) => {
+  try {
+    const { titulo, descricao, dataInicio, dataFim, local, tipo } = req.body;
+
+    // Validar dados obrigatórios
+    if (!titulo || !descricao || !dataInicio || !dataFim || !local || !tipo) {
+      return res.status(400).json({ error: "Todos os campos são obrigatórios" });
+    }
+
+    // Validar tipo do evento
+    const tiposValidos = ["ALUNO", "PERSONAL", "TODOS"];
+    if (!tiposValidos.includes(tipo)) {
+      return res.status(400).json({ error: "Tipo de evento inválido. Deve ser ALUNO, PERSONAL ou TODOS" });
+    }
+
+    // Buscar academia do usuário logado
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: { academia: true }
+    });
+
+    if (!user.academia) {
+      return res.status(404).json({ error: "Perfil de academia não encontrado" });
+    }
+
+    // Converter datas
+    let dataInicioObj, dataFimObj;
+    try {
+      // Verificar se as datas estão no formato ISO ou DD/MM/YYYY
+      if (dataInicio.includes('/')) {
+        const [dia, mes, ano] = dataInicio.split('/');
+        dataInicioObj = new Date(`${ano}-${mes}-${dia}`);
+      } else {
+        dataInicioObj = new Date(dataInicio);
+      }
+
+      if (dataFim.includes('/')) {
+        const [dia, mes, ano] = dataFim.split('/');
+        dataFimObj = new Date(`${ano}-${mes}-${dia}`);
+      } else {
+        dataFimObj = new Date(dataFim);
+      }
+
+      if (isNaN(dataInicioObj) || isNaN(dataFimObj)) {
+        throw new Error("Data inválida");
+      }
+    } catch (error) {
+      return res.status(400).json({ error: "Formato de data inválido. Use ISO ou DD/MM/YYYY" });
+    }
+
+    // Criar evento
+    const novoEvento = await prisma.evento.create({
+      data: {
+        titulo,
+        descricao,
+        dataInicio: dataInicioObj,
+        dataFim: dataFimObj,
+        local,
+        tipo,
+        academiaId: user.academia.id
+      }
+    });
+
+    console.log(`Evento ${novoEvento.id} criado para a academia ${user.academia.id}`);
+
+    res.status(201).json({
+      message: "Evento criado com sucesso",
+      evento: novoEvento
+    });
+  } catch (err) {
+    console.error("Erro ao criar evento:", err);
+    res.status(500).json({ error: "Erro ao criar evento" });
+  }
+});
+
+// Obter evento específico
+router.get("/eventos/:eventoId", [isAcademia], async (req, res) => {
+  try {
+    const { eventoId } = req.params;
+
+    // Buscar academia do usuário logado
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: { academia: true }
+    });
+
+    if (!user.academia) {
+      return res.status(404).json({ error: "Perfil de academia não encontrado" });
+    }
+
+    // Buscar evento
+    const evento = await prisma.evento.findUnique({
+      where: { id: parseInt(eventoId) }
+    });
+
+    if (!evento) {
+      return res.status(404).json({ error: "Evento não encontrado" });
+    }
+
+    // Verificar se o evento pertence à academia
+    if (evento.academiaId !== user.academia.id) {
+      return res.status(403).json({ error: "Acesso negado. Este evento não pertence à sua academia" });
+    }
+
+    res.status(200).json(evento);
+  } catch (err) {
+    console.error("Erro ao buscar evento:", err);
+    res.status(500).json({ error: "Erro ao buscar evento" });
+  }
+});
+
+// Atualizar evento
+router.put("/eventos/:eventoId", [isAcademia], async (req, res) => {
+  try {
+    const { eventoId } = req.params;
+    const { titulo, descricao, dataInicio, dataFim, local, tipo } = req.body;
+
+    // Buscar academia do usuário logado
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: { academia: true }
+    });
+
+    if (!user.academia) {
+      return res.status(404).json({ error: "Perfil de academia não encontrado" });
+    }
+
+    // Buscar evento
+    const evento = await prisma.evento.findUnique({
+      where: { id: parseInt(eventoId) }
+    });
+
+    if (!evento) {
+      return res.status(404).json({ error: "Evento não encontrado" });
+    }
+
+    // Verificar se o evento pertence à academia
+    if (evento.academiaId !== user.academia.id) {
+      return res.status(403).json({ error: "Acesso negado. Este evento não pertence à sua academia" });
+    }
+
+    // Validar tipo do evento se fornecido
+    if (tipo) {
+      const tiposValidos = ["ALUNO", "PERSONAL", "TODOS"];
+      if (!tiposValidos.includes(tipo)) {
+        return res.status(400).json({ error: "Tipo de evento inválido. Deve ser ALUNO, PERSONAL ou TODOS" });
+      }
+    }
+
+    // Converter datas se fornecidas
+    let dataInicioObj, dataFimObj;
+    if (dataInicio) {
+      try {
+        if (dataInicio.includes('/')) {
+          const [dia, mes, ano] = dataInicio.split('/');
+          dataInicioObj = new Date(`${ano}-${mes}-${dia}`);
+        } else {
+          dataInicioObj = new Date(dataInicio);
+        }
+
+        if (isNaN(dataInicioObj)) {
+          throw new Error("Data inválida");
+        }
+      } catch (error) {
+        return res.status(400).json({ error: "Formato de data inválido para dataInicio. Use ISO ou DD/MM/YYYY" });
+      }
+    }
+
+    if (dataFim) {
+      try {
+        if (dataFim.includes('/')) {
+          const [dia, mes, ano] = dataFim.split('/');
+          dataFimObj = new Date(`${ano}-${mes}-${dia}`);
+        } else {
+          dataFimObj = new Date(dataFim);
+        }
+
+        if (isNaN(dataFimObj)) {
+          throw new Error("Data inválida");
+        }
+      } catch (error) {
+        return res.status(400).json({ error: "Formato de data inválido para dataFim. Use ISO ou DD/MM/YYYY" });
+      }
+    }
+
+    // Dados para atualização
+    const dadosAtualizacao = {
+      ...(titulo && { titulo }),
+      ...(descricao && { descricao }),
+      ...(dataInicioObj && { dataInicio: dataInicioObj }),
+      ...(dataFimObj && { dataFim: dataFimObj }),
+      ...(local && { local }),
+      ...(tipo && { tipo })
+    };
+
+    // Atualizar evento
+    const eventoAtualizado = await prisma.evento.update({
+      where: { id: parseInt(eventoId) },
+      data: dadosAtualizacao
+    });
+
+    console.log(`Evento ${eventoId} atualizado`);
+
+    res.status(200).json({
+      message: "Evento atualizado com sucesso",
+      evento: eventoAtualizado
+    });
+  } catch (err) {
+    console.error("Erro ao atualizar evento:", err);
+    res.status(500).json({ error: "Erro ao atualizar evento" });
+  }
+});
+
+// Excluir evento
+router.delete("/eventos/:eventoId", [isAcademia], async (req, res) => {
+  try {
+    const { eventoId } = req.params;
+
+    // Buscar academia do usuário logado
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: { academia: true }
+    });
+
+    if (!user.academia) {
+      return res.status(404).json({ error: "Perfil de academia não encontrado" });
+    }
+
+    // Buscar evento
+    const evento = await prisma.evento.findUnique({
+      where: { id: parseInt(eventoId) }
+    });
+
+    if (!evento) {
+      return res.status(404).json({ error: "Evento não encontrado" });
+    }
+
+    // Verificar se o evento pertence à academia
+    if (evento.academiaId !== user.academia.id) {
+      return res.status(403).json({ error: "Acesso negado. Este evento não pertence à sua academia" });
+    }
+
+    // Excluir evento
+    await prisma.evento.delete({
+      where: { id: parseInt(eventoId) }
+    });
+
+    console.log(`Evento ${eventoId} excluído`);
+
+    res.status(200).json({
+      message: "Evento excluído com sucesso"
+    });
+  } catch (err) {
+    console.error("Erro ao excluir evento:", err);
+    res.status(500).json({ error: "Erro ao excluir evento" });
+  }
+});
+
+// Rota para listar presenças confirmadas em um evento
+router.get('/eventos/:eventoId/presencas', [isAcademia], async (req, res) => {
+  try {
+    const { eventoId } = req.params;
+    
+    // Buscar academia do usuário logado
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: { academia: true }
+    });
+
+    if (!user.academia) {
+      return res.status(404).json({ error: 'Perfil de academia não encontrado' });
+    }
+    
+    // Verificar se o evento pertence à academia
+    const evento = await prisma.evento.findFirst({
+      where: {
+        id: parseInt(eventoId),
+        academiaId: user.academia.id
+      }
+    });
+
+    if (!evento) {
+      return res.status(404).json({ error: 'Evento não encontrado ou não pertence a esta academia' });
+    }
+
+    // Buscar presenças confirmadas
+    const presencas = await prisma.eventoPresenca.findMany({
+      where: {
+        eventoId: parseInt(eventoId)
+      }
+    });
+
+    // Buscar dados de usuário para cada presença
+    const presencasComUsuarios = await Promise.all(
+      presencas.map(async (presenca) => {
+        const usuario = await prisma.user.findUnique({
+          where: { id: presenca.userId },
+          include: {
+            preferenciasAluno: true,
+            preferenciasPersonal: true
+          }
+        });
+
+        return {
+          ...presenca,
+          usuario: {
+            id: usuario.id,
+            name: usuario.name,
+            email: usuario.email,
+            role: usuario.role,
+            perfil: usuario.role === 'ALUNO' ? usuario.preferenciasAluno : usuario.preferenciasPersonal
+          }
+        };
+      })
+    );
+
+    return res.json(presencasComUsuarios);
+  } catch (error) {
+    console.error('Erro ao buscar presenças:', error);
+    return res.status(500).json({ error: 'Erro ao buscar presenças confirmadas' });
+  }
+});
+
 export default router; 

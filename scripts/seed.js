@@ -381,6 +381,8 @@ async function main() {
     
     await criarTreinos(alunos);
     
+    await criarEventos(academias);
+    
     console.log("\n=== RESUMO ===");
     console.log(`Academias criadas: ${academias.length}`);
     
@@ -470,6 +472,89 @@ async function main() {
   } finally {
     await prisma.$disconnect();
   }
+}
+
+// Função para criar eventos simulados para as academias
+async function criarEventos(academias) {
+  console.log("\n=== EVENTOS ===");
+  
+  const tiposEventos = ["ALUNO", "PERSONAL", "TODOS"];
+  const titulosEventos = [
+    "Workshop de Nutrição", 
+    "Maratona Fitness", 
+    "Competição de Musculação", 
+    "Palestra sobre Saúde Mental", 
+    "Aula Especial de Yoga", 
+    "Avaliação Física Gratuita", 
+    "Campanha de Reciclagem", 
+    "Desafio de Perda de Peso", 
+    "Treinamento Funcional Especial",
+    "Encontro de Personal Trainers"
+  ];
+  
+  const locais = [
+    "Sala de Eventos Principal", 
+    "Área de Musculação", 
+    "Quadra Poliesportiva", 
+    "Sala de Yoga", 
+    "Auditório", 
+    "Piscina", 
+    "Área Externa"
+  ];
+  
+  for (const academia of academias) {
+    console.log(`\nCriando eventos para a Academia ${academia.name}:`);
+    
+    // Criar entre 4 a 8 eventos por academia
+    const quantidadeEventos = Math.floor(Math.random() * 5) + 4;
+    
+    for (let i = 0; i < quantidadeEventos; i++) {
+      // Gerar datas aleatórias
+      const dataAtual = new Date();
+      
+      // Gerar data de início aleatória dentro de -15 a +30 dias a partir de hoje
+      const dataInicio = new Date(dataAtual);
+      dataInicio.setDate(dataInicio.getDate() + (Math.floor(Math.random() * 45) - 15));
+      
+      // Gerar data de término entre 1 a 5 dias após o início
+      const dataFim = new Date(dataInicio);
+      dataFim.setDate(dataFim.getDate() + Math.floor(Math.random() * 5) + 1);
+      
+      // Escolher tipo aleatoriamente
+      const tipo = tiposEventos[Math.floor(Math.random() * tiposEventos.length)];
+      
+      // Escolher título aleatoriamente
+      const titulo = titulosEventos[Math.floor(Math.random() * titulosEventos.length)];
+      
+      // Gerar descrição
+      const descricao = `Evento ${tipo === 'ALUNO' ? 'exclusivo para alunos' : 
+                              tipo === 'PERSONAL' ? 'exclusivo para personais' : 
+                              'aberto para todos os membros'} da academia. ${titulo} irá ocorrer entre ${dataInicio.toLocaleDateString('pt-BR')} e ${dataFim.toLocaleDateString('pt-BR')}.`;
+      
+      // Escolher local aleatoriamente
+      const local = locais[Math.floor(Math.random() * locais.length)];
+      
+      // Criar evento
+      const evento = await prisma.evento.create({
+        data: {
+          titulo,
+          descricao,
+          dataInicio,
+          dataFim,
+          local,
+          tipo,
+          academiaId: academia.id
+        }
+      });
+      
+      console.log(`- Evento: ${titulo} (${tipo})`);
+      console.log(`  Data: ${dataInicio.toLocaleDateString('pt-BR')} a ${dataFim.toLocaleDateString('pt-BR')}`);
+      console.log(`  Local: ${local}`);
+      console.log("------------------------------");
+    }
+  }
+  
+  console.log('Eventos criados com sucesso!');
 }
 
 // Executar script

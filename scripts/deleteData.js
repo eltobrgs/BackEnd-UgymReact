@@ -21,6 +21,7 @@ async function limparBancoDeDados() {
     });
 
     // Excluir tabelas na ordem correta para respeitar relações
+    await prisma.$executeRaw`TRUNCATE TABLE "Evento" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "Exercicio" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "Treino" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "PreferenciasAluno" RESTART IDENTITY CASCADE`;

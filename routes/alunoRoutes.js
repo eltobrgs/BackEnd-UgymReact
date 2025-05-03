@@ -446,4 +446,168 @@ router.get("/aluno/meus-reports", [isAluno], async (req, res) => {
   }
 });
 
+// Obter eventos da academia do aluno
+router.get("/aluno/eventos", [isAluno], async (req, res) => {
+  try {
+    // Buscar perfil do aluno
+    const aluno = await prisma.preferenciasAluno.findUnique({
+      where: { userId: req.userId }
+    });
+    
+    if (!aluno) {
+      return res.status(404).json({ error: "Perfil de aluno não encontrado" });
+    }
+    
+    if (!aluno.academiaId) {
+      return res.status(404).json({ error: "Aluno não está vinculado a nenhuma academia" });
+    }
+    
+    // Filtrar por eventos futuros ou passados
+    const { futuros } = req.query;
+    let where = {
+      academiaId: aluno.academiaId,
+      OR: [
+        { tipo: "ALUNO" },
+        { tipo: "TODOS" }
+      ]
+    };
+    
+    // Adicionar filtro de data se solicitado
+    if (futuros === 'true') {
+      where.dataInicio = { gte: new Date() };
+    } else if (futuros === 'false') {
+      where.dataFim = { lt: new Date() };
+    }
+    
+    // Buscar eventos
+    const eventos = await prisma.evento.findMany({
+      where,
+      orderBy: { dataInicio: 'asc' }
+    });
+    
+    console.log(`Encontrados ${eventos.length} eventos para o aluno ${aluno.id} da academia ${aluno.academiaId}`);
+    
+    res.status(200).json(eventos);
+  } catch (err) {
+    console.error("Erro ao buscar eventos:", err);
+    res.status(500).json({ error: "Erro ao buscar eventos" });
+  }
+});
+
+// Verificar se o aluno já confirmou presença
+router.get('/eventos/:eventoId/confirmado', [isAluno], async (req, res) => {
+  try {
+    const { eventoId } = req.params;
+    const userId = req.userId;
+
+    // Verificar se existe confirmação
+    const presenca = await prisma.eventoPresenca.findFirst({
+      where: {
+        eventoId: parseInt(eventoId),
+        userId: userId
+      }
+    });
+
+    return res.json({ confirmado: !!presenca, presenca });
+  } catch (error) {
+    console.error('Erro ao verificar presença:', error);
+    return res.status(500).json({ error: 'Erro ao verificar confirmação de presença' });
+  }
+});
+
+// Confirmar presença em evento
+router.post('/eventos/:eventoId/confirmar', [isAluno], async (req, res) => {
+  try {
+    const { eventoId } = req.params;
+    const { comentario } = req.body;
+    const userId = req.userId;
+
+    // Verificar se o evento existe e é visível para o aluno
+    const aluno = await prisma.preferenciasAluno.findFirst({
+      where: { userId: userId }
+    });
+
+    if (!aluno) {
+      return res.status(404).json({ error: 'Perfil de aluno não encontrado' });
+    }
+
+    const evento = await prisma.evento.findFirst({
+      where: {
+        id: parseInt(eventoId),
+        OR: [
+          { tipo: 'ALUNO' },
+          { tipo: 'TODOS' }
+        ],
+        academiaId: aluno.academiaId
+      }
+    });
+
+    if (!evento) {
+      return res.status(404).json({ error: 'Evento não encontrado ou não disponível para este aluno' });
+    }
+
+    // Verificar se já existe uma presença confirmada para atualizar
+    const presencaExistente = await prisma.eventoPresenca.findFirst({
+      where: {
+        eventoId: parseInt(eventoId),
+        userId: userId
+      }
+    });
+
+    let presenca;
+    
+    if (presencaExistente) {
+      // Atualizar presença existente
+      presenca = await prisma.eventoPresenca.update({
+        where: { id: presencaExistente.id },
+        data: { comentario }
+      });
+    } else {
+      // Criar nova presença
+      presenca = await prisma.eventoPresenca.create({
+        data: {
+          eventoId: parseInt(eventoId),
+          userId: userId,
+          comentario
+        }
+      });
+    }
+
+    return res.status(201).json(presenca);
+  } catch (error) {
+    console.error('Erro ao confirmar presença:', error);
+    return res.status(500).json({ error: 'Erro ao confirmar presença no evento' });
+  }
+});
+
+// Cancelar presença em evento
+router.delete('/eventos/:eventoId/confirmar', [isAluno], async (req, res) => {
+  try {
+    const { eventoId } = req.params;
+    const userId = req.userId;
+
+    // Verificar se existe confirmação
+    const presenca = await prisma.eventoPresenca.findFirst({
+      where: {
+        eventoId: parseInt(eventoId),
+        userId: userId
+      }
+    });
+
+    if (!presenca) {
+      return res.status(404).json({ error: 'Confirmação de presença não encontrada' });
+    }
+
+    // Remover confirmação
+    await prisma.eventoPresenca.delete({
+      where: { id: presenca.id }
+    });
+
+    return res.json({ message: 'Confirmação de presença cancelada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao cancelar presença:', error);
+    return res.status(500).json({ error: 'Erro ao cancelar presença no evento' });
+  }
+});
+
 export default router; 

@@ -420,4 +420,282 @@ router.get("/buscar-aluno-email", async (req, res) => {
   }
 });
 
+// =================== ROTAS PARA GERENCIAR TAREFAS ===================
+
+// Listar tarefas do usuário (criadas por ele ou atribuídas a ele)
+router.get("/tasks", async (req, res) => {
+  try {
+    const tasks = await prisma.task.findMany({
+      where: {
+        OR: [
+          { createdBy: req.userId },
+          { assignedTo: req.userId }
+        ]
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        }
+      },
+      orderBy: {
+        dueDate: 'asc'
+      }
+    });
+
+    // Atualizar status das tarefas vencidas
+    const now = new Date();
+    const updatedTasks = await Promise.all(tasks.map(async (task) => {
+      if (task.status === 'pending' && new Date(task.dueDate) < now) {
+        // Atualizar status para vencido no banco de dados
+        await prisma.task.update({
+          where: { id: task.id },
+          data: { status: 'overdue' }
+        });
+        
+        // Retornar tarefa com status atualizado
+        return {
+          ...task,
+          status: 'overdue'
+        };
+      }
+      return task;
+    }));
+
+    res.status(200).json(updatedTasks);
+  } catch (err) {
+    console.error("Erro ao buscar tarefas:", err);
+    res.status(500).json({ error: "Erro ao buscar tarefas" });
+  }
+});
+
+// Criar nova tarefa
+router.post("/tasks", async (req, res) => {
+  try {
+    const { title, description, dueDate, assignedTo, deletable } = req.body;
+
+    if (!title || !dueDate) {
+      return res.status(400).json({ error: "Título e data de vencimento são obrigatórios" });
+    }
+
+    // Verificar se o usuário atribuído existe
+    if (assignedTo) {
+      const assignedUser = await prisma.user.findUnique({
+        where: { id: parseInt(assignedTo) }
+      });
+
+      if (!assignedUser) {
+        return res.status(404).json({ error: "Usuário atribuído não encontrado" });
+      }
+    }
+
+    const task = await prisma.task.create({
+      data: {
+        title,
+        description: description || "",
+        dueDate: new Date(dueDate),
+        createdBy: req.userId,
+        assignedTo: assignedTo ? parseInt(assignedTo) : null,
+        deletable: deletable !== undefined ? deletable : true,
+        status: 'pending'
+      },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json(task);
+  } catch (err) {
+    console.error("Erro ao criar tarefa:", err);
+    res.status(500).json({ error: "Erro ao criar tarefa" });
+  }
+});
+
+// Atualizar status da tarefa
+router.put("/tasks/:id/status", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!status || !['pending', 'completed', 'overdue'].includes(status)) {
+      return res.status(400).json({ error: "Status inválido. Use 'pending', 'completed' ou 'overdue'" });
+    }
+
+    // Verificar se a tarefa existe e se o usuário tem permissão
+    const existingTask = await prisma.task.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!existingTask) {
+      return res.status(404).json({ error: "Tarefa não encontrada" });
+    }
+
+    // Verificar se o usuário é o criador ou o atribuído
+    if (existingTask.createdBy !== req.userId && existingTask.assignedTo !== req.userId) {
+      return res.status(403).json({ error: "Você não tem permissão para atualizar esta tarefa" });
+    }
+
+    const updatedTask = await prisma.task.update({
+      where: { id: parseInt(id) },
+      data: { status },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        },
+        assignee: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true
+          }
+        }
+      }
+    });
+
+    res.status(200).json(updatedTask);
+  } catch (err) {
+    console.error("Erro ao atualizar status da tarefa:", err);
+    res.status(500).json({ error: "Erro ao atualizar status da tarefa" });
+  }
+});
+
+// Excluir tarefa
+router.delete("/tasks/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Verificar se a tarefa existe
+    const task = await prisma.task.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!task) {
+      return res.status(404).json({ error: "Tarefa não encontrada" });
+    }
+
+    // Verificar se o usuário é o criador da tarefa
+    if (task.createdBy !== req.userId) {
+      return res.status(403).json({ error: "Apenas o criador pode excluir a tarefa" });
+    }
+
+    // Verificar se a tarefa pode ser excluída
+    if (!task.deletable) {
+      return res.status(403).json({ error: "Esta tarefa não pode ser excluída" });
+    }
+
+    await prisma.task.delete({
+      where: { id: parseInt(id) }
+    });
+
+    res.status(200).json({ message: "Tarefa excluída com sucesso" });
+  } catch (err) {
+    console.error("Erro ao excluir tarefa:", err);
+    res.status(500).json({ error: "Erro ao excluir tarefa" });
+  }
+});
+
+// Listar usuários para atribuir tarefas (será útil para academias e personais)
+router.get("/users-for-tasks", async (req, res) => {
+  try {
+    const currentUser = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { role: true }
+    });
+
+    let users = [];
+
+    // Se for ACADEMIA, pode atribuir tarefas para alunos e personais vinculados
+    if (currentUser.role === 'ACADEMIA') {
+      // Buscar alunos vinculados à academia
+      const alunos = await prisma.user.findMany({
+        where: {
+          role: 'ALUNO',
+          preferenciasAluno: {
+            academiaId: req.userId
+          }
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true
+        }
+      });
+
+      // Buscar personais vinculados à academia
+      const personais = await prisma.user.findMany({
+        where: {
+          role: 'PERSONAL',
+          preferenciasPersonal: {
+            academiaId: req.userId
+          }
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true
+        }
+      });
+
+      users = [...alunos, ...personais];
+    } 
+    // Se for PERSONAL, pode atribuir tarefas para seus alunos
+    else if (currentUser.role === 'PERSONAL') {
+      users = await prisma.user.findMany({
+        where: {
+          role: 'ALUNO',
+          preferenciasAluno: {
+            personalId: req.userId
+          }
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true
+        }
+      });
+    }
+
+    res.status(200).json(users);
+  } catch (err) {
+    console.error("Erro ao buscar usuários para tarefas:", err);
+    res.status(500).json({ error: "Erro ao buscar usuários para tarefas" });
+  }
+});
+
 export default router; 

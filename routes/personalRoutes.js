@@ -846,6 +846,54 @@ router.get("/personal/debug/alunos", [isPersonal], async (req, res) => {
   }
 });
 
+// Obter eventos da academia do personal
+router.get("/personal/eventos", [isPersonal], async (req, res) => {
+  try {
+    // Buscar personal
+    const personal = await prisma.preferenciasPersonal.findUnique({
+      where: { userId: req.userId }
+    });
+    
+    if (!personal) {
+      return res.status(404).json({ error: "Perfil de personal não encontrado" });
+    }
+    
+    if (!personal.academiaId) {
+      return res.status(404).json({ error: "Personal não está vinculado a nenhuma academia" });
+    }
+    
+    // Filtrar por eventos futuros ou passados
+    const { futuros } = req.query;
+    let where = {
+      academiaId: personal.academiaId,
+      OR: [
+        { tipo: "PERSONAL" },
+        { tipo: "TODOS" }
+      ]
+    };
+    
+    // Adicionar filtro de data se solicitado
+    if (futuros === 'true') {
+      where.dataInicio = { gte: new Date() };
+    } else if (futuros === 'false') {
+      where.dataFim = { lt: new Date() };
+    }
+    
+    // Buscar eventos
+    const eventos = await prisma.evento.findMany({
+      where,
+      orderBy: { dataInicio: 'asc' }
+    });
+    
+    console.log(`Encontrados ${eventos.length} eventos para o personal ${personal.id} da academia ${personal.academiaId}`);
+    
+    res.status(200).json(eventos);
+  } catch (err) {
+    console.error("Erro ao buscar eventos:", err);
+    res.status(500).json({ error: "Erro ao buscar eventos" });
+  }
+});
+
 // Criar ou atualizar relatório de um aluno (requer ser personal)
 router.post("/personal/aluno/:alunoId/reports", [isPersonal], async (req, res) => {
   try {
@@ -952,6 +1000,123 @@ router.post("/personal/aluno/:alunoId/reports", [isPersonal], async (req, res) =
   } catch (err) {
     console.error(`Erro ao ${req.body.id ? 'atualizar' : 'criar'} relatório para o aluno ${req.params.alunoId}:`, err);
     res.status(500).json({ error: `Erro ao ${req.body.id ? 'atualizar' : 'criar'} relatório` });
+  }
+});
+
+// Verificar se personal confirmou presença
+router.get('/personal/eventos/:eventoId/confirmado', [isPersonal], async (req, res) => {
+  try {
+    const { eventoId } = req.params;
+    const userId = req.userId;
+
+    // Verificar se existe confirmação
+    const presenca = await prisma.eventoPresenca.findFirst({
+      where: {
+        eventoId: parseInt(eventoId),
+        userId: userId
+      }
+    });
+
+    return res.json({ confirmado: !!presenca, presenca });
+  } catch (error) {
+    console.error('Erro ao verificar presença:', error);
+    return res.status(500).json({ error: 'Erro ao verificar confirmação de presença' });
+  }
+});
+
+// Confirmar presença em evento
+router.post('/personal/eventos/:eventoId/confirmar', [isPersonal], async (req, res) => {
+  try {
+    const { eventoId } = req.params;
+    const { comentario } = req.body;
+    const userId = req.userId;
+
+    // Verificar se o personal está vinculado a uma academia
+    const personal = await prisma.preferenciasPersonal.findFirst({
+      where: { userId: userId }
+    });
+
+    if (!personal) {
+      return res.status(404).json({ error: 'Perfil de personal não encontrado' });
+    }
+
+    // Verificar se o evento existe e é visível para o personal
+    const evento = await prisma.evento.findFirst({
+      where: {
+        id: parseInt(eventoId),
+        OR: [
+          { tipo: 'PERSONAL' },
+          { tipo: 'TODOS' }
+        ],
+        academiaId: personal.academiaId
+      }
+    });
+
+    if (!evento) {
+      return res.status(404).json({ error: 'Evento não encontrado ou não disponível para este personal' });
+    }
+
+    // Verificar se já existe uma presença confirmada para atualizar
+    const presencaExistente = await prisma.eventoPresenca.findFirst({
+      where: {
+        eventoId: parseInt(eventoId),
+        userId: userId
+      }
+    });
+
+    let presenca;
+    
+    if (presencaExistente) {
+      // Atualizar presença existente
+      presenca = await prisma.eventoPresenca.update({
+        where: { id: presencaExistente.id },
+        data: { comentario }
+      });
+    } else {
+      // Criar nova presença
+      presenca = await prisma.eventoPresenca.create({
+        data: {
+          eventoId: parseInt(eventoId),
+          userId: userId,
+          comentario
+        }
+      });
+    }
+
+    return res.status(201).json(presenca);
+  } catch (error) {
+    console.error('Erro ao confirmar presença:', error);
+    return res.status(500).json({ error: 'Erro ao confirmar presença no evento' });
+  }
+});
+
+// Cancelar presença em evento
+router.delete('/personal/eventos/:eventoId/confirmar', [isPersonal], async (req, res) => {
+  try {
+    const { eventoId } = req.params;
+    const userId = req.userId;
+
+    // Verificar se existe confirmação
+    const presenca = await prisma.eventoPresenca.findFirst({
+      where: {
+        eventoId: parseInt(eventoId),
+        userId: userId
+      }
+    });
+
+    if (!presenca) {
+      return res.status(404).json({ error: 'Confirmação de presença não encontrada' });
+    }
+
+    // Remover confirmação
+    await prisma.eventoPresenca.delete({
+      where: { id: presenca.id }
+    });
+
+    return res.json({ message: 'Confirmação de presença cancelada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao cancelar presença:', error);
+    return res.status(500).json({ error: 'Erro ao cancelar presença no evento' });
   }
 });
 

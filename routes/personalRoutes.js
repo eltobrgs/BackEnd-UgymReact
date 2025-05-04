@@ -1120,4 +1120,177 @@ router.delete('/personal/eventos/:eventoId/confirmar', [isPersonal], async (req,
   }
 });
 
+// Obter estatísticas do dashboard do personal
+router.get("/personal/dashboard-stats", [isPersonal], async (req, res) => {
+  try {
+    // Buscar personal
+    const personal = await prisma.preferenciasPersonal.findUnique({
+      where: { userId: req.userId }
+    });
+    
+    if (!personal) {
+      return res.status(404).json({ error: "Perfil de personal não encontrado" });
+    }
+    
+    // Buscar total de alunos vinculados ao personal
+    const totalAlunos = await prisma.preferenciasAluno.count({
+      where: { personalId: personal.id }
+    });
+    
+    // Buscar total de treinos configurados na semana atual
+    const hoje = new Date();
+    const inicioSemana = new Date(hoje);
+    inicioSemana.setDate(hoje.getDate() - hoje.getDay()); // Domingo
+    inicioSemana.setHours(0, 0, 0, 0);
+    
+    const fimSemana = new Date(inicioSemana);
+    fimSemana.setDate(inicioSemana.getDate() + 6); // Sábado
+    fimSemana.setHours(23, 59, 59, 999);
+    
+    const totalTreinos = await prisma.treino.count({
+      where: {
+        personal: {
+          userId: req.userId
+        },
+        createdAt: {
+          gte: inicioSemana,
+          lte: fimSemana
+        }
+      }
+    });
+    
+    // Buscar consultas agendadas para hoje
+    const consultasHoje = await prisma.agendamento.count({
+      where: {
+        personalId: personal.id,
+        data: {
+          gte: new Date(hoje.setHours(0, 0, 0, 0)),
+          lte: new Date(hoje.setHours(23, 59, 59, 999))
+        }
+      }
+    });
+    
+    // Calcular receita mensal estimada (preço por hora × número de alunos × 4 semanas)
+    const receitaMensal = personal.pricePerHour 
+      ? Math.round(personal.pricePerHour * totalAlunos * 4) 
+      : 0;
+    
+    res.status(200).json({
+      totalAlunos,
+      totalTreinos,
+      consultasHoje,
+      receitaMensal
+    });
+  } catch (err) {
+    console.error("Erro ao buscar estatísticas do dashboard:", err);
+    res.status(500).json({ error: "Erro ao buscar estatísticas do dashboard" });
+  }
+});
+
+// Obter progresso dos alunos do personal
+router.get("/personal/alunos-progresso", [isPersonal], async (req, res) => {
+  try {
+    // Buscar personal
+    const personal = await prisma.preferenciasPersonal.findUnique({
+      where: { userId: req.userId }
+    });
+    
+    if (!personal) {
+      return res.status(404).json({ error: "Perfil de personal não encontrado" });
+    }
+    
+    // Buscar alunos vinculados ao personal
+    const alunos = await prisma.preferenciasAluno.findMany({
+      where: { personalId: personal.id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            imageUrl: true
+          }
+        },
+        medidasHistorico: {
+          orderBy: {
+            dataRegistro: 'desc'
+          },
+          take: 2 // Pegamos os 2 últimos registros para comparar tendência
+        }
+      }
+    });
+    
+    // Buscar treinos e exercícios para calcular progresso
+    const alunosComProgresso = await Promise.all(alunos.map(async (aluno) => {
+      // Buscar todos os treinos do aluno
+      const treinos = await prisma.treino.findMany({
+        where: { alunoId: aluno.id },
+        include: {
+          exercicios: true
+        }
+      });
+      
+      // Calcular porcentagem de exercícios concluídos
+      let totalExercicios = 0;
+      let exerciciosConcluidos = 0;
+      
+      treinos.forEach(treino => {
+        totalExercicios += treino.exercicios.length;
+        exerciciosConcluidos += treino.exercicios.filter(ex => ex.status === 'completed').length;
+      });
+      
+      const progressoTreino = totalExercicios > 0 
+        ? Math.round((exerciciosConcluidos / totalExercicios) * 100) 
+        : 0;
+      
+      // Determinar tendência de peso
+      let tendenciaPeso = undefined;
+      const ultimasMedidas = aluno.medidasHistorico;
+      
+      if (ultimasMedidas.length >= 2) {
+        const pesoAtual = parseFloat(ultimasMedidas[0].peso);
+        const pesoAnterior = parseFloat(ultimasMedidas[1].peso);
+        
+        if (pesoAtual > pesoAnterior) {
+          tendenciaPeso = 'aumento';
+        } else if (pesoAtual < pesoAnterior) {
+          tendenciaPeso = 'reducao';
+        } else {
+          tendenciaPeso = 'estavel';
+        }
+      }
+      
+      // Buscar última atividade do aluno (último exercício concluído)
+      const ultimoExercicioConcluido = await prisma.exercicio.findFirst({
+        where: {
+          treino: {
+            alunoId: aluno.id
+          },
+          status: 'completed'
+        },
+        orderBy: {
+          updatedAt: 'desc'
+        }
+      });
+      
+      const ultimaAtividade = ultimoExercicioConcluido?.updatedAt;
+      
+      return {
+        id: aluno.user.id,
+        name: aluno.user.name,
+        goal: aluno.objetivo || 'Não definido',
+        imageUrl: aluno.user.imageUrl,
+        progressoTreino,
+        tendenciaPeso,
+        ultimaAtividade
+      };
+    }));
+    
+    res.status(200).json(alunosComProgresso);
+  } catch (err) {
+    console.error("Erro ao buscar progresso dos alunos:", err);
+    res.status(500).json({ error: "Erro ao buscar progresso dos alunos" });
+  }
+});
+
 export default router; 

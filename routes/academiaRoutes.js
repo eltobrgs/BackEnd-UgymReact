@@ -515,4 +515,141 @@ router.get('/eventos/:eventoId/presencas', [isAcademia], async (req, res) => {
   }
 });
 
+// Obter estatísticas do dashboard da academia
+router.get("/academia/dashboard-stats", [isAcademia], async (req, res) => {
+  try {
+    // Buscar academia
+    const academia = await prisma.academia.findUnique({
+      where: { userId: req.userId }
+    });
+    
+    if (!academia) {
+      return res.status(404).json({ error: "Perfil de academia não encontrado" });
+    }
+    
+    // Buscar total de alunos vinculados à academia
+    const totalStudents = await prisma.preferenciasAluno.count({
+      where: { academiaId: academia.id }
+    });
+    
+    // Buscar total de personais vinculados à academia
+    const totalPersonals = await prisma.preferenciasPersonal.count({
+      where: { academiaId: academia.id }
+    });
+    
+    // Buscar total de equipamentos cadastrados
+    const totalEquipment = await prisma.equipamento.count({
+      where: { academiaId: academia.id }
+    });
+    
+    // Buscar eventos futuros
+    const hoje = new Date();
+    const upcomingEvents = await prisma.evento.count({
+      where: {
+        academiaId: academia.id,
+        dataFim: {
+          gte: hoje
+        }
+      }
+    });
+    
+    // Calcular receita mensal estimada (mensalidade média × número de alunos)
+    const mensalidadeMedia = 150; // Valor fixo para exemplo
+    const monthlyRevenue = totalStudents * mensalidadeMedia;
+    
+    res.status(200).json({
+      totalStudents,
+      totalPersonals,
+      totalEquipment,
+      upcomingEvents,
+      monthlyRevenue
+    });
+  } catch (err) {
+    console.error("Erro ao buscar estatísticas do dashboard:", err);
+    res.status(500).json({ error: "Erro ao buscar estatísticas do dashboard" });
+  }
+});
+
+// Obter ações recentes da academia
+router.get("/academia/acoes-recentes", [isAcademia], async (req, res) => {
+  try {
+    // Buscar academia
+    const academia = await prisma.academia.findUnique({
+      where: { userId: req.userId }
+    });
+    
+    if (!academia) {
+      return res.status(404).json({ error: "Perfil de academia não encontrado" });
+    }
+    
+    // Placeholder para buscar ações recentes de uma tabela de logs
+    // Como essa tabela pode não existir no modelo atual, geramos dados de exemplo
+    
+    // Array de exemplos de ações recentes
+    const acoes = [
+      {
+        id: 1,
+        tipo: 'CADASTRO_ALUNO',
+        descricao: 'Novo aluno registrado',
+        data: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 horas atrás
+        usuarioId: req.userId,
+        usuarioNome: 'Admin da Academia'
+      },
+      {
+        id: 2,
+        tipo: 'CADASTRO_PERSONAL',
+        descricao: 'Novo personal cadastrado',
+        data: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 dia atrás
+        usuarioId: req.userId,
+        usuarioNome: 'Admin da Academia'
+      },
+      {
+        id: 3,
+        tipo: 'CADASTRO_EVENTO',
+        descricao: 'Evento de fim de ano criado',
+        data: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 dias atrás
+        usuarioId: req.userId,
+        usuarioNome: 'Admin da Academia'
+      },
+      {
+        id: 4,
+        tipo: 'EDICAO_ALUNO',
+        descricao: 'Informações de aluno atualizadas',
+        data: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), // 4 dias atrás
+        usuarioId: req.userId,
+        usuarioNome: 'Admin da Academia'
+      },
+      {
+        id: 5,
+        tipo: 'CADASTRO_EQUIPAMENTO',
+        descricao: 'Novos equipamentos cadastrados',
+        data: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 dias atrás
+        usuarioId: req.userId,
+        usuarioNome: 'Admin da Academia'
+      },
+      {
+        id: 6,
+        tipo: 'CONCLUSAO_TAREFA',
+        descricao: 'Tarefa concluída com sucesso',
+        data: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(), // 6 dias atrás
+        usuarioId: req.userId,
+        usuarioNome: 'Admin da Academia'
+      },
+      {
+        id: 7,
+        tipo: 'CADASTRO_TAREFA',
+        descricao: 'Nova tarefa adicionada',
+        data: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 dias atrás
+        usuarioId: req.userId,
+        usuarioNome: 'Admin da Academia'
+      }
+    ];
+    
+    res.status(200).json(acoes);
+  } catch (err) {
+    console.error("Erro ao buscar ações recentes:", err);
+    res.status(500).json({ error: "Erro ao buscar ações recentes" });
+  }
+});
+
 export default router; 

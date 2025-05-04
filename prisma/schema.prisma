@@ -14,6 +14,19 @@ enum Role {
   ACADEMIA
 }
 
+enum StatusPagamento {
+  PAGO
+  PENDENTE
+  ATRASADO
+}
+
+enum TipoPlano {
+  MENSAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
+}
+
 model User {
   id                 Int                 @id @default(autoincrement())
   email              String              @unique
@@ -49,6 +62,7 @@ model PreferenciasAluno {
   academia            Academia? @relation(fields: [academiaId], references: [id])
   treinos             Treino[]
   reports             Report[]
+  pagamentos          Pagamento[]
 }
 
 model PreferenciasPersonal {
@@ -96,6 +110,24 @@ model Academia {
   alunos            PreferenciasAluno[]
   personais         PreferenciasPersonal[]
   eventos           Evento[]
+  pagamentos        Pagamento[]
+}
+
+model Pagamento {
+  id                Int             @id @default(autoincrement())
+  valor             Float
+  dataPagamento     DateTime
+  dataVencimento    DateTime
+  status            StatusPagamento @default(PENDENTE)
+  formaPagamento    String
+  tipoPlano         TipoPlano       @default(MENSAL)
+  observacoes       String?
+  alunoId           Int             @map("aluno_id")
+  aluno             PreferenciasAluno @relation(fields: [alunoId], references: [id])
+  academiaId        Int             @map("academia_id")
+  academia          Academia        @relation(fields: [academiaId], references: [id])
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 }
 
 model Treino {

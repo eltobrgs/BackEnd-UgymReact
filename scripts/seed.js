@@ -369,6 +369,140 @@ async function criarTreinos(alunos) {
   console.log('Treinos criados com sucesso!');
 }
 
+// Função para criar pagamentos para alunos
+async function criarPagamentos(alunos, academias) {
+  console.log("\n=== PAGAMENTOS ===");
+  
+  const formasPagamento = [
+    'Cartão de Crédito', 
+    'Cartão de Débito', 
+    'Boleto Bancário', 
+    'PIX', 
+    'Dinheiro',
+    'Transferência Bancária'
+  ];
+  
+  const statusOpcoes = ['PAGO', 'PENDENTE', 'ATRASADO'];
+  const planosOpcoes = ['MENSAL', 'TRIMESTRAL', 'SEMESTRAL', 'ANUAL'];
+  const valoresPorPlano = {
+    'MENSAL': { min: 80, max: 150 },
+    'TRIMESTRAL': { min: 210, max: 400 },
+    'SEMESTRAL': { min: 400, max: 700 },
+    'ANUAL': { min: 750, max: 1200 }
+  };
+  
+  // Data atual
+  const dataAtual = new Date();
+  
+  for (const aluno of alunos) {
+    console.log(`\nCriando histórico de pagamentos para o aluno: ${aluno.name}`);
+    
+    if (!aluno.preferenciasId) {
+      console.log(`- Preferências do aluno ${aluno.name} não encontradas, pulando`);
+      continue;
+    }
+    
+    // Buscar a academia associada ao aluno
+    const alunoPreferencias = await prisma.preferenciasAluno.findUnique({
+      where: { id: aluno.preferenciasId }
+    });
+    
+    if (!alunoPreferencias || !alunoPreferencias.academiaId) {
+      console.log(`- Aluno ${aluno.name} não está associado a nenhuma academia, pulando`);
+      continue;
+    }
+    
+    // Usar a academia do aluno em vez de uma aleatória
+    const academiaId = alunoPreferencias.academiaId;
+    
+    // Encontrar dados da academia para log
+    const academiaInfo = academias.find(a => a.id === academiaId);
+    const academiaNome = academiaInfo ? academiaInfo.name : `ID: ${academiaId}`;
+    
+    console.log(`- Academia: ${academiaNome}`);
+    
+    // Escolher um plano para o aluno
+    const planoAtual = planosOpcoes[Math.floor(Math.random() * planosOpcoes.length)];
+    
+    // Definir valor da mensalidade baseado no plano
+    const valorBase = Math.floor(
+      Math.random() * (valoresPorPlano[planoAtual].max - valoresPorPlano[planoAtual].min) + 
+      valoresPorPlano[planoAtual].min
+    );
+    
+    // Gerar histórico de pagamentos (últimos 6 meses)
+    for (let i = 0; i < 6; i++) {
+      const dataVencimento = new Date(dataAtual);
+      dataVencimento.setMonth(dataVencimento.getMonth() - i);
+      dataVencimento.setDate(15); // Dia 15 de cada mês como vencimento
+      
+      // Para meses passados, status provavelmente PAGO
+      // Para mês atual, pode ser PENDENTE ou PAGO
+      // Para o mês futuro (caso i=0 e estamos no início do mês), pode ser PENDENTE
+      let status;
+      if (i > 0) {
+        // Meses passados - 90% de chance de estar pago, 10% de estar atrasado
+        status = Math.random() < 0.9 ? 'PAGO' : 'ATRASADO';
+      } else {
+        // Mês atual - 60% pago, 30% pendente, 10% atrasado
+        const chance = Math.random();
+        if (chance < 0.6) status = 'PAGO';
+        else if (chance < 0.9) status = 'PENDENTE';
+        else status = 'ATRASADO';
+      }
+      
+      // Data de pagamento (caso esteja pago)
+      let dataPagamento = null;
+      if (status === 'PAGO') {
+        dataPagamento = new Date(dataVencimento);
+        // 70% de chance de pagar antes do vencimento
+        if (Math.random() < 0.7) {
+          dataPagamento.setDate(dataPagamento.getDate() - Math.floor(Math.random() * 10) - 1);
+        } else {
+          dataPagamento.setDate(dataPagamento.getDate() + Math.floor(Math.random() * 3) + 1);
+        }
+      } else {
+        // Para pendente ou atrasado, a data de pagamento é a data atual (registro do pagamento)
+        dataPagamento = new Date();
+      }
+      
+      // Forma de pagamento aleatória
+      const formaPagamento = formasPagamento[Math.floor(Math.random() * formasPagamento.length)];
+      
+      // Variação no valor (promoções, descontos, etc)
+      const valorFinal = valorBase * (Math.random() * 0.1 + 0.95); // Entre 95% e 105% do valor base
+      
+      // Criar o pagamento
+      const pagamento = await prisma.pagamento.create({
+        data: {
+          valor: parseFloat(valorFinal.toFixed(2)),
+          dataPagamento,
+          dataVencimento,
+          status,
+          formaPagamento,
+          tipoPlano: planoAtual,
+          observacoes: status === 'PAGO' 
+            ? 'Pagamento realizado com sucesso' 
+            : status === 'PENDENTE' 
+              ? 'Aguardando confirmação de pagamento' 
+              : 'Pagamento em atraso',
+          alunoId: aluno.preferenciasId,
+          academiaId: academiaId
+        }
+      });
+      
+      console.log(`- Pagamento ${i+1}: ${formatarData(dataVencimento)} - ${status} - ${planoAtual} - R$ ${valorFinal.toFixed(2)}`);
+    }
+  }
+  
+  console.log('Pagamentos criados com sucesso!');
+}
+
+// Função auxiliar para formatar data
+function formatarData(data) {
+  return data.toLocaleDateString('pt-BR');
+}
+
 async function main() {
   try {
     console.log('Iniciando seed do banco de dados...');
@@ -382,6 +516,8 @@ async function main() {
     await criarTreinos(alunos);
     
     await criarEventos(academias);
+    
+    await criarPagamentos(alunos, academias);
     
     console.log("\n=== RESUMO ===");
     console.log(`Academias criadas: ${academias.length}`);

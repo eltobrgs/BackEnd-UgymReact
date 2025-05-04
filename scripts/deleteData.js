@@ -21,12 +21,16 @@ async function limparBancoDeDados() {
     });
 
     // Excluir tabelas na ordem correta para respeitar relações
+    await prisma.$executeRaw`TRUNCATE TABLE "EventoPresenca" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "Evento" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "Exercicio" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "Treino" RESTART IDENTITY CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "Report" RESTART IDENTITY CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "Pagamento" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "PreferenciasAluno" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "PreferenciasPersonal" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "Academia" RESTART IDENTITY CASCADE`;
+    await prisma.$executeRaw`TRUNCATE TABLE "Task" RESTART IDENTITY CASCADE`;
     await prisma.$executeRaw`TRUNCATE TABLE "User" RESTART IDENTITY CASCADE`;
 
     console.log('Tabelas limpas com sucesso!');

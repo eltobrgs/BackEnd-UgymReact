@@ -652,4 +652,238 @@ router.get("/academia/acoes-recentes", [isAcademia], async (req, res) => {
   }
 });
 
+// Adicionando as rotas de pagamentos para academia
+
+// Listar todos os alunos com status de pagamento
+router.get('/alunos/pagamentos', [isAcademia], async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { academia: true }
+    });
+
+    if (!user || user.role !== 'ACADEMIA' || !user.academia) {
+      return res.status(403).json({ error: 'Acesso não autorizado. Usuário não é uma academia.' });
+    }
+
+    const academiaId = user.academia.id;
+
+    // Buscar alunos da academia com informações de pagamento mais recente
+    const alunos = await prisma.preferenciasAluno.findMany({
+      where: {
+        academiaId: academiaId
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        pagamentos: {
+          orderBy: {
+            dataVencimento: 'desc'
+          },
+          take: 1
+        }
+      }
+    });
+
+    // Formatar resposta
+    const alunosComPagamento = alunos.map(aluno => {
+      const pagamentoRecente = aluno.pagamentos[0];
+      
+      return {
+        id: aluno.id,
+        userId: aluno.userId,
+        nome: aluno.user.name,
+        email: aluno.user.email,
+        goal: aluno.goal,
+        statusPagamento: pagamentoRecente ? pagamentoRecente.status : 'PENDENTE',
+        ultimoPagamento: pagamentoRecente ? pagamentoRecente.dataPagamento : null,
+        dataVencimento: pagamentoRecente ? pagamentoRecente.dataVencimento : null,
+        plano: pagamentoRecente ? pagamentoRecente.tipoPlano : 'MENSAL',
+        valor: pagamentoRecente ? pagamentoRecente.valor : 0
+      };
+    });
+
+    return res.status(200).json(alunosComPagamento);
+  } catch (error) {
+    console.error('Erro ao buscar alunos com pagamentos:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Obter histórico de pagamentos de um aluno específico
+router.get('/alunos/:id/pagamentos', [isAcademia], async (req, res) => {
+  try {
+    const userId = req.userId;
+    const alunoId = parseInt(req.params.id);
+
+    if (isNaN(alunoId)) {
+      return res.status(400).json({ error: 'ID do aluno inválido' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { academia: true }
+    });
+
+    if (!user || user.role !== 'ACADEMIA' || !user.academia) {
+      return res.status(403).json({ error: 'Acesso não autorizado. Usuário não é uma academia.' });
+    }
+
+    const academiaId = user.academia.id;
+
+    // Verificar se o aluno pertence à academia
+    const aluno = await prisma.preferenciasAluno.findFirst({
+      where: {
+        id: alunoId,
+        academiaId: academiaId
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    if (!aluno) {
+      return res.status(404).json({ error: 'Aluno não encontrado ou não pertence à sua academia' });
+    }
+
+    // Buscar pagamentos do aluno
+    const pagamentos = await prisma.pagamento.findMany({
+      where: {
+        alunoId: alunoId,
+        academiaId: academiaId
+      },
+      orderBy: {
+        dataVencimento: 'desc'
+      }
+    });
+
+    return res.status(200).json(pagamentos);
+  } catch (error) {
+    console.error('Erro ao buscar pagamentos do aluno:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Registrar novo pagamento
+router.post('/pagamentos', [isAcademia], async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { alunoId, valor, dataPagamento, dataVencimento, status, formaPagamento, tipoPlano, observacoes } = req.body;
+
+    if (!alunoId || !valor || !dataPagamento || !dataVencimento || !formaPagamento || !tipoPlano) {
+      return res.status(400).json({ error: 'Dados incompletos para registrar o pagamento' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { academia: true }
+    });
+
+    if (!user || user.role !== 'ACADEMIA' || !user.academia) {
+      return res.status(403).json({ error: 'Acesso não autorizado. Usuário não é uma academia.' });
+    }
+
+    const academiaId = user.academia.id;
+
+    // Verificar se o aluno pertence à academia
+    const aluno = await prisma.preferenciasAluno.findFirst({
+      where: {
+        id: parseInt(alunoId),
+        academiaId: academiaId
+      }
+    });
+
+    if (!aluno) {
+      return res.status(404).json({ error: 'Aluno não encontrado ou não pertence à sua academia' });
+    }
+
+    // Criar o pagamento
+    const novoPagamento = await prisma.pagamento.create({
+      data: {
+        valor: parseFloat(valor),
+        dataPagamento: new Date(dataPagamento),
+        dataVencimento: new Date(dataVencimento),
+        status: status || 'PAGO',
+        formaPagamento,
+        tipoPlano,
+        observacoes,
+        alunoId: parseInt(alunoId),
+        academiaId
+      }
+    });
+
+    return res.status(201).json(novoPagamento);
+  } catch (error) {
+    console.error('Erro ao registrar pagamento:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Atualizar pagamento existente
+router.put('/pagamentos/:id', [isAcademia], async (req, res) => {
+  try {
+    const userId = req.userId;
+    const pagamentoId = parseInt(req.params.id);
+    const { valor, dataPagamento, dataVencimento, status, formaPagamento, tipoPlano, observacoes } = req.body;
+
+    if (isNaN(pagamentoId)) {
+      return res.status(400).json({ error: 'ID do pagamento inválido' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { academia: true }
+    });
+
+    if (!user || user.role !== 'ACADEMIA' || !user.academia) {
+      return res.status(403).json({ error: 'Acesso não autorizado. Usuário não é uma academia.' });
+    }
+
+    const academiaId = user.academia.id;
+
+    // Verificar se o pagamento existe e pertence à academia
+    const pagamento = await prisma.pagamento.findFirst({
+      where: {
+        id: pagamentoId,
+        academiaId: academiaId
+      }
+    });
+
+    if (!pagamento) {
+      return res.status(404).json({ error: 'Pagamento não encontrado ou não pertence à sua academia' });
+    }
+
+    // Atualizar o pagamento
+    const pagamentoAtualizado = await prisma.pagamento.update({
+      where: { id: pagamentoId },
+      data: {
+        ...(valor && { valor: parseFloat(valor) }),
+        ...(dataPagamento && { dataPagamento: new Date(dataPagamento) }),
+        ...(dataVencimento && { dataVencimento: new Date(dataVencimento) }),
+        ...(status && { status }),
+        ...(formaPagamento && { formaPagamento }),
+        ...(tipoPlano && { tipoPlano }),
+        observacoes
+      }
+    });
+
+    return res.status(200).json(pagamentoAtualizado);
+  } catch (error) {
+    console.error('Erro ao atualizar pagamento:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 export default router; 

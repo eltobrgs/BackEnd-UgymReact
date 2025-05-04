@@ -755,4 +755,112 @@ router.get("/aluno/personal-responsavel", [isAluno], async (req, res) => {
   }
 });
 
+// Obter dados de pagamento do aluno logado
+router.get('/pagamentos', [isAluno], async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { preferenciasAluno: true }
+    });
+
+    if (!user || user.role !== 'ALUNO' || !user.preferenciasAluno) {
+      return res.status(403).json({ error: 'Acesso não autorizado. Usuário não é um aluno.' });
+    }
+
+    const alunoId = user.preferenciasAluno.id;
+
+    // Buscar pagamentos do aluno ordenados por data de vencimento
+    const pagamentos = await prisma.pagamento.findMany({
+      where: {
+        alunoId: alunoId
+      },
+      orderBy: {
+        dataVencimento: 'desc'
+      }
+    });
+
+    // Obter pagamento mais recente para o resumo
+    const pagamentoMaisRecente = pagamentos[0];
+    
+    // Calcular dias restantes
+    let diasRestantes = 0;
+    if (pagamentoMaisRecente) {
+      const hoje = new Date();
+      const dataVencimento = new Date(pagamentoMaisRecente.dataVencimento);
+      diasRestantes = Math.ceil((dataVencimento - hoje) / (1000 * 60 * 60 * 24));
+    }
+
+    // Preparar resumo e histórico
+    const resumo = pagamentoMaisRecente ? {
+      proximoVencimento: pagamentoMaisRecente.dataVencimento,
+      diasRestantes: diasRestantes,
+      planoAtual: pagamentoMaisRecente.tipoPlano,
+      valorMensalidade: pagamentoMaisRecente.valor,
+      status: pagamentoMaisRecente.status
+    } : null;
+
+    return res.status(200).json({
+      resumo,
+      historico: pagamentos
+    });
+  } catch (error) {
+    console.error('Erro ao buscar pagamentos do aluno:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Obter apenas o resumo do pagamento (para exibir em cards)
+router.get('/pagamentos/resumo', [isAluno], async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { preferenciasAluno: true }
+    });
+
+    if (!user || user.role !== 'ALUNO' || !user.preferenciasAluno) {
+      return res.status(403).json({ error: 'Acesso não autorizado. Usuário não é um aluno.' });
+    }
+
+    const alunoId = user.preferenciasAluno.id;
+
+    // Buscar pagamento mais recente
+    const pagamentoMaisRecente = await prisma.pagamento.findFirst({
+      where: {
+        alunoId: alunoId
+      },
+      orderBy: {
+        dataVencimento: 'desc'
+      }
+    });
+    
+    // Se não existir pagamento, retornar nulo
+    if (!pagamentoMaisRecente) {
+      return res.status(200).json(null);
+    }
+    
+    // Calcular dias restantes
+    const hoje = new Date();
+    const dataVencimento = new Date(pagamentoMaisRecente.dataVencimento);
+    const diasRestantes = Math.ceil((dataVencimento - hoje) / (1000 * 60 * 60 * 24));
+
+    // Preparar resumo
+    const resumo = {
+      proximoVencimento: pagamentoMaisRecente.dataVencimento,
+      diasRestantes: diasRestantes,
+      planoAtual: pagamentoMaisRecente.tipoPlano,
+      valorMensalidade: pagamentoMaisRecente.valor,
+      status: pagamentoMaisRecente.status
+    };
+
+    return res.status(200).json(resumo);
+  } catch (error) {
+    console.error('Erro ao buscar resumo do pagamento:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 export default router; 

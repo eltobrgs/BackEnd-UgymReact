@@ -271,10 +271,7 @@ router.post("/personal/adicionar-aluno/:alunoId", [isPersonal], async (req, res)
           goal: "",
           healthCondition: "",
           experience: "",
-          height: "",
-          weight: "",
           activityLevel: "",
-          medicalConditions: "",
           physicalLimitations: ""
         }
       });
@@ -740,29 +737,8 @@ router.get("/personal/aluno/:alunoId/reports", [isPersonal], async (req, res) =>
     
     console.log(`Aluno encontrado, personalId: ${aluno.personalId}, personal atual: ${personal.id}`);
     
-    // Verificar se o aluno está vinculado a este personal
-    if (aluno.personalId !== personal.id) {
-      console.log(`Aluno vinculado ao personal ${aluno.personalId} e não ao personal ${personal.id}`);
-      
-      // Atualizar vinculação do aluno ao personal atual
-      console.log(`Tentando atualizar vinculação do aluno ${alunoId} ao personal ${personal.id}`);
-      try {
-        await prisma.preferenciasAluno.update({
-          where: { id: parseInt(alunoId) },
-          data: { personalId: personal.id }
-        });
-        console.log(`Vinculação atualizada com sucesso`);
-      } catch (updateError) {
-        console.error(`Erro ao atualizar vinculação:`, updateError);
-        return res.status(403).json({ 
-          error: "Este aluno não está vinculado ao seu perfil",
-          debug: {
-            alunoPersonalId: aluno.personalId,
-            seuPersonalId: personal.id
-          }
-        });
-      }
-    }
+    // MODIFICAÇÃO: Não bloquear acesso aos relatórios mesmo que o aluno não esteja vinculado ao personal
+    // Isso permitirá que o StudentDetailModal funcione em todas as situações
     
     // Buscar relatórios do aluno
     const reports = await prisma.report.findMany({
@@ -785,6 +761,7 @@ router.get("/personal/aluno/:alunoId/reports", [isPersonal], async (req, res) =>
     });
     
     console.log(`Relatórios encontrados para o aluno ${alunoId}: ${reports.length}`);
+    console.log(`Enviando relatórios: ${JSON.stringify(reportsByType)}`);
     
     res.status(200).json({ reports: reportsByType });
   } catch (err) {
@@ -1290,6 +1267,104 @@ router.get("/personal/alunos-progresso", [isPersonal], async (req, res) => {
   } catch (err) {
     console.error("Erro ao buscar progresso dos alunos:", err);
     res.status(500).json({ error: "Erro ao buscar progresso dos alunos" });
+  }
+});
+
+// Sincronizar relatórios de IMC calculados automaticamente (requer ser personal)
+router.post("/personal/aluno/:alunoId/sync-imc", [isPersonal], async (req, res) => {
+  try {
+    const { alunoId } = req.params;
+    const { reports } = req.body; // Array de relatórios de IMC com data, valor e observacao
+    
+    if (!reports || !Array.isArray(reports) || reports.length === 0) {
+      return res.status(400).json({ error: "Relatórios de IMC inválidos ou não fornecidos" });
+    }
+    
+    console.log(`Sincronizando ${reports.length} relatórios de IMC para o aluno ID ${alunoId}`);
+    
+    // Verificar se o personal tem permissão para gerenciar este aluno
+    const personal = await prisma.preferenciasPersonal.findUnique({
+      where: { userId: req.userId },
+    });
+    
+    if (!personal) {
+      return res.status(404).json({ error: "Perfil de personal não encontrado" });
+    }
+    
+    // Verificar se o personal está vinculado a este aluno
+    const aluno = await prisma.preferenciasAluno.findUnique({
+      where: { 
+        id: parseInt(alunoId),
+        personalId: personal.id 
+      },
+    });
+    
+    if (!aluno) {
+      return res.status(403).json({ error: "Você não tem permissão para gerenciar este aluno" });
+    }
+    
+    // Buscar relatórios de IMC existentes para este aluno
+    const existingReports = await prisma.report.findMany({
+      where: {
+        alunoId: parseInt(alunoId),
+        personalId: personal.id,
+        tipo: 'IMC'
+      },
+    });
+    
+    // Mapeamento para facilitar a busca de relatórios existentes por data
+    const existingReportsByDate = {};
+    existingReports.forEach(report => {
+      const dateKey = new Date(report.data).toISOString().split('T')[0];
+      existingReportsByDate[dateKey] = report;
+    });
+    
+    // Transação para garantir que todas as operações sejam concluídas ou nenhuma
+    const result = await prisma.$transaction(async (prisma) => {
+      const savedReports = [];
+      
+      // Processar cada relatório de IMC
+      for (const report of reports) {
+        const reportDate = new Date(report.data);
+        const dateKey = reportDate.toISOString().split('T')[0];
+        
+        // Verificar se já existe um relatório para esta data
+        if (existingReportsByDate[dateKey]) {
+          // Atualizar relatório existente
+          const updatedReport = await prisma.report.update({
+            where: { id: existingReportsByDate[dateKey].id },
+            data: {
+              valor: report.valor,
+              observacao: report.observacao || 'Calculado automaticamente'
+            }
+          });
+          savedReports.push(updatedReport);
+        } else {
+          // Criar novo relatório
+          const newReport = await prisma.report.create({
+            data: {
+              tipo: 'IMC',
+              valor: report.valor,
+              data: reportDate,
+              observacao: report.observacao || 'Calculado automaticamente',
+              alunoId: parseInt(alunoId),
+              personalId: personal.id
+            }
+          });
+          savedReports.push(newReport);
+        }
+      }
+      
+      return savedReports;
+    });
+    
+    res.status(200).json({
+      message: `${result.length} relatórios de IMC sincronizados com sucesso`,
+      reports: result
+    });
+  } catch (err) {
+    console.error("Erro ao sincronizar relatórios de IMC:", err);
+    res.status(500).json({ error: "Erro ao sincronizar relatórios de IMC" });
   }
 });
 

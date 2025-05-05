@@ -114,10 +114,7 @@ router.post("/aluno/cadastrar", async (req, res) => {
             goal: "Não informado",
             healthCondition: "",
             experience: "Iniciante",
-            height: "Não informado",
-            weight: "Não informado",
             activityLevel: "",
-            medicalConditions: "",
             physicalLimitations: "",
             academiaId: academiaId
           }

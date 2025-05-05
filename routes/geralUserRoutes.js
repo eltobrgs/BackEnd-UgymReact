@@ -204,10 +204,15 @@ router.get("/alunos/listar", async (req, res) => {
         name: student.name,
         email: student.email,
         age: age || 'Não informado',
-        weight: student.preferenciasAluno?.weight || 'Não informado',
-        height: student.preferenciasAluno?.height || 'Não informado',
+        weight: 'Dados em relatórios',
+        height: 'Dados em relatórios',
         goal: student.preferenciasAluno?.goal || 'Não informado',
         trainingTime: student.preferenciasAluno?.experience || 'Iniciante',
+        gender: student.preferenciasAluno?.gender || '',
+        healthCondition: student.preferenciasAluno?.healthCondition || '',
+        experience: student.preferenciasAluno?.experience || '',
+        activityLevel: student.preferenciasAluno?.activityLevel || '',
+        physicalLimitations: student.preferenciasAluno?.physicalLimitations || '',
         academiaId: student.preferenciasAluno?.academiaId
       };
     });

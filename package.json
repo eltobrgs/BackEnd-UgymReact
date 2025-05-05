@@ -12,6 +12,9 @@
     "delete": "bun run scripts/deleteData.js",
     "reset": "bun run scripts/deleteData.js && bun run scripts/seed.js"
   },
+  "prisma": {
+    "seed": "bun run scripts/seed.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

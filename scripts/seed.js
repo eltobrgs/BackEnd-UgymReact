@@ -239,10 +239,7 @@ async function criarAlunos(academiaComPersonais) {
               goal: objetivo,
               healthCondition: 'Saudável',
               experience: ['Iniciante', 'Intermediário', 'Avançado'][Math.floor(Math.random() * 3)],
-              height: `${165 + Math.floor(Math.random() * 30)}`,
-              weight: `${50 + Math.floor(Math.random() * 50)}`,
               activityLevel: ['Leve', 'Moderado', 'Intenso'][Math.floor(Math.random() * 3)],
-              medicalConditions: 'Nenhuma',
               physicalLimitations: 'Nenhuma',
               personalId: associarAPersonal ? personal.preferenciasId : null,
               academiaId: academiaDados.academiaId
@@ -503,6 +500,88 @@ function formatarData(data) {
   return data.toLocaleDateString('pt-BR');
 }
 
+// Função para criar relatórios de exemplo para alunos
+async function criarRelatorios(alunos) {
+  // Função para gerar uma data aleatória dentro de um intervalo
+  const randomDate = (start, end) => {
+    return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
+  };
+  
+  // Buscar todos os personais
+  const personais = await prisma.preferenciasPersonal.findMany();
+  
+  console.log("\n=== RELATÓRIOS ===");
+  // Para cada aluno, criar relatórios de diferentes tipos
+  for (const aluno of alunos) {
+    if (!aluno.preferenciasId) continue;
+    
+    console.log(`\nCriando relatórios para o aluno: ${aluno.name}`);
+    
+    const tiposRelatorio = ['peso', 'altura', 'medidas_braco', 'medidas_perna', 'medidas_cintura', 'gordura_corporal'];
+    const personal = personais[Math.floor(Math.random() * personais.length)];
+    
+    // Gerar datas para os últimos 3 meses
+    const hoje = new Date();
+    const tresMesesAtras = new Date();
+    tresMesesAtras.setMonth(hoje.getMonth() - 3);
+    
+    // Para cada tipo de relatório, criar 5 registros com datas diferentes
+    for (const tipo of tiposRelatorio) {
+      console.log(`- Criando relatórios de ${tipo}`);
+      
+      for (let i = 0; i < 5; i++) {
+        let valor;
+        let observacao = '';
+        
+        // Gerar valores realistas para cada tipo
+        switch (tipo) {
+          case 'peso':
+            valor = 60 + Math.random() * 40; // 60kg a 100kg
+            observacao = i === 0 ? 'Medição inicial' : `Semana ${i}`;
+            break;
+          case 'altura':
+            valor = 165 + Math.random() * 30; // 165cm a 195cm
+            observacao = i === 0 ? 'Medição inicial' : `Atualização ${i}`;
+            break;
+          case 'medidas_braco':
+            valor = 25 + Math.random() * 15; // 25cm a 40cm
+            break;
+          case 'medidas_perna':
+            valor = 40 + Math.random() * 20; // 40cm a 60cm
+            break;
+          case 'medidas_cintura':
+            valor = 60 + Math.random() * 40; // 60cm a 100cm
+            break;
+          case 'gordura_corporal':
+            valor = 10 + Math.random() * 25; // 10% a 35%
+            observacao = valor < 15 ? 'Atlético' : 
+                        valor < 25 ? 'Fitness' : 'Precisa melhorar';
+            break;
+        }
+        
+        // Gerar data aleatória dentro do período
+        const data = randomDate(tresMesesAtras, hoje);
+        
+        // Criar o relatório
+        await prisma.report.create({
+          data: {
+            tipo,
+            valor,
+            data,
+            observacao,
+            alunoId: aluno.preferenciasId,
+            personalId: personal.id
+          }
+        });
+      }
+    }
+    
+    console.log(`Total de ${tiposRelatorio.length * 5} relatórios criados para o aluno ${aluno.name}`);
+  }
+  
+  console.log('Relatórios criados com sucesso!');
+}
+
 async function main() {
   try {
     console.log('Iniciando seed do banco de dados...');
@@ -519,6 +598,9 @@ async function main() {
     
     await criarPagamentos(alunos, academias);
     
+    // Criar relatórios de exemplo para alunos
+    await criarRelatorios(alunos);
+    
     console.log("\n=== RESUMO ===");
     console.log(`Academias criadas: ${academias.length}`);
     
@@ -528,81 +610,6 @@ async function main() {
     }
     console.log(`Personais criados: ${totalPersonais}`);
     console.log(`Alunos criados: ${alunos.length}`);
-    
-    // Criar relatórios de exemplo para alunos
-    console.log('Criando relatórios de exemplo...');
-    
-    // Função para gerar uma data aleatória dentro de um intervalo
-    const randomDate = (start, end) => {
-      return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
-    };
-    
-    // Buscar todos os personais
-    const personais = await prisma.preferenciasPersonal.findMany();
-    
-    // Para cada aluno, criar relatórios de diferentes tipos
-    for (const aluno of alunos) {
-      const tiposRelatorio = ['peso', 'IMC', 'medidas_braco', 'medidas_perna', 'medidas_cintura', 'gordura_corporal'];
-      const personal = personais[Math.floor(Math.random() * personais.length)];
-      
-      // Gerar datas para os últimos 3 meses
-      const hoje = new Date();
-      const tresMesesAtras = new Date();
-      tresMesesAtras.setMonth(hoje.getMonth() - 3);
-      
-      // Para cada tipo de relatório, criar 5 registros com datas diferentes
-      for (const tipo of tiposRelatorio) {
-        for (let i = 0; i < 5; i++) {
-          let valor;
-          let observacao = '';
-          
-          // Gerar valores realistas para cada tipo
-          switch (tipo) {
-            case 'peso':
-              valor = 60 + Math.random() * 40; // 60kg a 100kg
-              observacao = i === 0 ? 'Medição inicial' : `Semana ${i}`;
-              break;
-            case 'IMC':
-              valor = 18 + Math.random() * 15; // 18 a 33
-              observacao = valor < 18.5 ? 'Abaixo do peso' : 
-                          valor < 25 ? 'Peso normal' : 
-                          valor < 30 ? 'Sobrepeso' : 'Obesidade';
-              break;
-            case 'medidas_braco':
-              valor = 25 + Math.random() * 15; // 25cm a 40cm
-              break;
-            case 'medidas_perna':
-              valor = 40 + Math.random() * 20; // 40cm a 60cm
-              break;
-            case 'medidas_cintura':
-              valor = 60 + Math.random() * 40; // 60cm a 100cm
-              break;
-            case 'gordura_corporal':
-              valor = 10 + Math.random() * 25; // 10% a 35%
-              observacao = valor < 15 ? 'Atlético' : 
-                          valor < 25 ? 'Fitness' : 'Precisa melhorar';
-              break;
-          }
-          
-          // Gerar data aleatória dentro do período
-          const data = randomDate(tresMesesAtras, hoje);
-          
-          // Criar o relatório
-          await prisma.report.create({
-            data: {
-              tipo,
-              valor,
-              data,
-              observacao,
-              alunoId: aluno.preferenciasId,
-              personalId: personal.id
-            }
-          });
-        }
-      }
-    }
-    
-    console.log('Relatórios de exemplo criados com sucesso!');
   } catch (e) {
     console.error('Erro durante a população:', e);
   } finally {

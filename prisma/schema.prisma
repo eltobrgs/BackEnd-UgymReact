@@ -8,6 +8,186 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model User {
+  id                   Int                   @id @default(autoincrement())
+  email                String                @unique
+  name                 String?
+  password             String
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  role                 Role                  @default(ALUNO)
+  academia             Academia?
+  preferenciasAluno    PreferenciasAluno?
+  preferenciasPersonal PreferenciasPersonal?
+  assignedTasks        Task[]                @relation("AssignedTasks")
+  createdTasks         Task[]                @relation("CreatedTasks")
+}
+
+model PreferenciasAluno {
+  id                  Int                   @id @default(autoincrement())
+  birthDate           DateTime
+  gender              String
+  goal                String
+  healthCondition     String
+  experience          String
+  activityLevel       String
+  physicalLimitations String
+  userId              Int                   @unique @map("user_id")
+  personalId          Int?
+  academiaId          Int?                  @map("academia_id")
+  pagamentos          Pagamento[]
+  academia            Academia?             @relation(fields: [academiaId], references: [id])
+  personal            PreferenciasPersonal? @relation(fields: [personalId], references: [id])
+  user                User                  @relation(fields: [userId], references: [id])
+  reports             Report[]
+  treinos             Treino[]
+}
+
+model PreferenciasPersonal {
+  id                Int                 @id @default(autoincrement())
+  cref              String              @unique
+  specialization    String
+  birthDate         DateTime
+  gender            String
+  specializations   String[]
+  yearsOfExperience String
+  workSchedule      String
+  certifications    String[]
+  biography         String
+  workLocation      String
+  pricePerHour      String
+  languages         String[]
+  instagram         String?
+  linkedin          String?
+  userId            Int                 @unique @map("user_id")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  academiaId        Int?                @map("academia_id")
+  students          PreferenciasAluno[]
+  academia          Academia?           @relation(fields: [academiaId], references: [id])
+  user              User                @relation(fields: [userId], references: [id])
+  reports           Report[]
+}
+
+model Academia {
+  id                   Int                    @id @default(autoincrement())
+  cnpj                 String                 @unique
+  endereco             String
+  telefone             String
+  horarioFuncionamento String
+  descricao            String
+  comodidades          String[]
+  planos               String[]
+  website              String?
+  instagram            String?
+  facebook             String?
+  userId               Int                    @unique @map("user_id")
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  user                 User                   @relation(fields: [userId], references: [id])
+  eventos              Evento[]
+  pagamentos           Pagamento[]
+  alunos               PreferenciasAluno[]
+  personais            PreferenciasPersonal[]
+}
+
+model Pagamento {
+  id             Int               @id @default(autoincrement())
+  valor          Float
+  dataPagamento  DateTime
+  dataVencimento DateTime
+  status         StatusPagamento   @default(PENDENTE)
+  formaPagamento String
+  tipoPlano      TipoPlano         @default(MENSAL)
+  observacoes    String?
+  alunoId        Int               @map("aluno_id")
+  academiaId     Int               @map("academia_id")
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  academia       Academia          @relation(fields: [academiaId], references: [id])
+  aluno          PreferenciasAluno @relation(fields: [alunoId], references: [id])
+}
+
+model Treino {
+  id         Int               @id @default(autoincrement())
+  diaSemana  Int
+  alunoId    Int               @map("aluno_id")
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  exercicios Exercicio[]
+  aluno      PreferenciasAluno @relation(fields: [alunoId], references: [id])
+}
+
+model Exercicio {
+  id         Int      @id @default(autoincrement())
+  name       String
+  sets       Int
+  time       String
+  restTime   String
+  repsPerSet Int
+  status     String
+  image      String
+  treinoId   Int      @map("treino_id")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  treino     Treino   @relation(fields: [treinoId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id         Int                   @id @default(autoincrement())
+  tipo       String
+  valor      Float
+  data       DateTime              @default(now())
+  observacao String?
+  alunoId    Int                   @map("aluno_id")
+  personalId Int?                  @map("personal_id")
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  aluno      PreferenciasAluno     @relation(fields: [alunoId], references: [id])
+  personal   PreferenciasPersonal? @relation(fields: [personalId], references: [id])
+}
+
+model Task {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  dueDate     DateTime
+  status      String   @default("pending")
+  deletable   Boolean  @default(true)
+  createdBy   Int
+  assignedTo  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  assignee    User?    @relation("AssignedTasks", fields: [assignedTo], references: [id])
+  creator     User     @relation("CreatedTasks", fields: [createdBy], references: [id])
+}
+
+model Evento {
+  id         Int              @id @default(autoincrement())
+  titulo     String
+  descricao  String
+  dataInicio DateTime
+  dataFim    DateTime
+  local      String
+  academiaId Int              @map("academia_id")
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  tipo       String
+  academia   Academia         @relation(fields: [academiaId], references: [id])
+  presencas  EventoPresenca[]
+}
+
+model EventoPresenca {
+  id         Int      @id @default(autoincrement())
+  eventoId   Int      @map("evento_id")
+  userId     Int      @map("user_id")
+  comentario String?
+  createdAt  DateTime @default(now())
+  evento     Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+
+  @@unique([eventoId, userId])
+}
+
 enum Role {
   ALUNO
   PERSONAL
@@ -26,190 +206,3 @@ enum TipoPlano {
   SEMESTRAL
   ANUAL
 }
-
-model User {
-  id                 Int                 @id @default(autoincrement())
-  email              String              @unique
-  name               String?
-  password           String
-  role               Role                @default(ALUNO)
-  preferenciasAluno  PreferenciasAluno?
-  preferenciasPersonal PreferenciasPersonal?
-  academia           Academia?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  createdTasks       Task[]              @relation("CreatedTasks")
-  assignedTasks      Task[]              @relation("AssignedTasks")
-}
-
-model PreferenciasAluno {
-  id                  Int      @id @default(autoincrement())
-  birthDate           DateTime
-  gender              String
-  goal                String
-  healthCondition     String
-  experience          String
-  height              String
-  weight              String
-  activityLevel       String
-  medicalConditions   String
-  physicalLimitations String
-  userId              Int      @unique @map("user_id")
-  user                User     @relation(fields: [userId], references: [id])
-  personalId          Int?
-  personal            PreferenciasPersonal? @relation(fields: [personalId], references: [id])
-  academiaId          Int?     @map("academia_id")
-  academia            Academia? @relation(fields: [academiaId], references: [id])
-  treinos             Treino[]
-  reports             Report[]
-  pagamentos          Pagamento[]
-}
-
-model PreferenciasPersonal {
-  id                Int      @id @default(autoincrement())
-  cref              String   @unique
-  specialization    String
-  birthDate         DateTime
-  gender            String
-  specializations   String[]
-  yearsOfExperience String
-  workSchedule      String
-  certifications    String[]
-  biography         String
-  workLocation      String
-  pricePerHour      String
-  languages         String[]
-  instagram         String?
-  linkedin          String?
-  userId            Int      @unique @map("user_id")
-  user              User     @relation(fields: [userId], references: [id])
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  students          PreferenciasAluno[]
-  academiaId        Int?     @map("academia_id")
-  academia          Academia? @relation(fields: [academiaId], references: [id])
-  reports           Report[]
-}
-
-model Academia {
-  id                Int      @id @default(autoincrement())
-  cnpj              String   @unique
-  endereco          String
-  telefone          String
-  horarioFuncionamento String
-  descricao         String
-  comodidades       String[]
-  planos            String[]
-  website           String?
-  instagram         String?
-  facebook          String?
-  userId            Int      @unique @map("user_id")
-  user              User     @relation(fields: [userId], references: [id])
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  alunos            PreferenciasAluno[]
-  personais         PreferenciasPersonal[]
-  eventos           Evento[]
-  pagamentos        Pagamento[]
-}
-
-model Pagamento {
-  id                Int             @id @default(autoincrement())
-  valor             Float
-  dataPagamento     DateTime
-  dataVencimento    DateTime
-  status            StatusPagamento @default(PENDENTE)
-  formaPagamento    String
-  tipoPlano         TipoPlano       @default(MENSAL)
-  observacoes       String?
-  alunoId           Int             @map("aluno_id")
-  aluno             PreferenciasAluno @relation(fields: [alunoId], references: [id])
-  academiaId        Int             @map("academia_id")
-  academia          Academia        @relation(fields: [academiaId], references: [id])
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-}
-
-model Treino {
-  id                Int         @id @default(autoincrement())
-  diaSemana         Int         // 0-6 representando Domingo a Sábado
-  alunoId           Int         @map("aluno_id")
-  aluno             PreferenciasAluno @relation(fields: [alunoId], references: [id])
-  exercicios        Exercicio[]
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-}
-
-model Exercicio {
-  id                Int         @id @default(autoincrement())
-  name              String
-  sets              Int
-  time              String
-  restTime          String
-  repsPerSet        Int
-  status            String      // "completed", "inprogress", "not-started"
-  image             String
-  treinoId          Int         @map("treino_id")
-  treino            Treino      @relation(fields: [treinoId], references: [id], onDelete: Cascade)
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-}
-
-model Report {
-  id                Int         @id @default(autoincrement())
-  tipo              String      // ex: peso, IMC, medidas_braco, medidas_perna, etc
-  valor             Float       
-  data              DateTime    @default(now())
-  observacao        String?     // Campo opcional para comentários
-  alunoId           Int         @map("aluno_id")
-  aluno             PreferenciasAluno @relation(fields: [alunoId], references: [id])
-  personalId        Int?        @map("personal_id")
-  personal          PreferenciasPersonal? @relation(fields: [personalId], references: [id])
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-}
-
-model Task {
-  id          Int      @id @default(autoincrement())
-  title       String
-  description String?
-  dueDate     DateTime
-  status      String   @default("pending") // pending, completed, overdue
-  deletable   Boolean  @default(true)
-  createdBy   Int
-  assignedTo  Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  creator     User     @relation("CreatedTasks", fields: [createdBy], references: [id])
-  assignee    User?    @relation("AssignedTasks", fields: [assignedTo], references: [id])
-}
-
-model Evento {
-  id          Int      @id @default(autoincrement())
-  titulo      String
-  descricao   String
-  dataInicio  DateTime
-  dataFim     DateTime
-  local       String
-  tipo        String   // "ALUNO", "PERSONAL", "TODOS"
-  academiaId  Int      @map("academia_id")
-  academia    Academia @relation(fields: [academiaId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  presencas   EventoPresenca[]
-}
-
-model EventoPresenca {
-  id         Int      @id @default(autoincrement())
-  eventoId   Int      @map("evento_id")
-  evento     Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
-  userId     Int      @map("user_id")
-  comentario String?
-  createdAt  DateTime @default(now())
-
-  @@unique([eventoId, userId])
-}
-
-
-

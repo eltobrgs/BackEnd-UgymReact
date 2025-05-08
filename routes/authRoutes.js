@@ -149,7 +149,7 @@ router.post("/aluno/cadastrar", async (req, res) => {
 // Cadastro de personal trainer
 router.post("/personal/cadastrar", async (req, res) => {
   try {
-    const { name, email, password, cref, specialization, academiaId } = req.body;
+    const { name, email, password, cref, specializations, academiaId } = req.body;
 
     // Verificar se o CREF já existe
     const existingCref = await prisma.preferenciasPersonal.findUnique({
@@ -187,10 +187,9 @@ router.post("/personal/cadastrar", async (req, res) => {
         preferenciasPersonal: {
           create: {
             cref,
-            specialization,
             birthDate: new Date(),
             gender: "",
-            specializations: [],
+            specializations: specializations || [],
             yearsOfExperience: "",
             workSchedule: "",
             certifications: [],

@@ -46,7 +46,6 @@ model PreferenciasAluno {
 model PreferenciasPersonal {
   id                Int                 @id @default(autoincrement())
   cref              String              @unique
-  specialization    String
   birthDate         DateTime
   gender            String
   specializations   String[]

@@ -132,7 +132,6 @@ async function criarPersonais(academias) {
           preferenciasPersonal: {
             create: {
               cref: personalInfo.cref,
-              specialization: personalInfo.especializacao,
               birthDate: new Date(1985, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1),
               gender: Math.random() > 0.5 ? 'Masculino' : 'Feminino',
               specializations: [personalInfo.especializacao, 'Alongamento', 'Aeróbico'],

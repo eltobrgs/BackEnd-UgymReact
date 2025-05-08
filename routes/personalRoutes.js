@@ -86,7 +86,6 @@ router.post("/personal/preferencias", [isPersonal], async (req, res) => {
   try {
     const {
       cref, 
-      specialization, 
       birthDate,
       gender,
       specializations,
@@ -136,7 +135,6 @@ router.post("/personal/preferencias", [isPersonal], async (req, res) => {
     // Dados a serem salvos/atualizados
     const personalData = {
       cref,
-      specialization,
       birthDate: parsedBirthDate.toISOString(),
       gender,
       specializations,
@@ -165,6 +163,84 @@ router.post("/personal/preferencias", [isPersonal], async (req, res) => {
   } catch (err) {
     console.error("Erro ao salvar perfil de personal:", err);
     res.status(500).json({ error: "Erro ao salvar perfil de personal" });
+  }
+});
+
+// Rota para editar perfil do personal (apenas campos específicos)
+router.put("/personal/editar-perfil", [isPersonal], async (req, res) => {
+  try {
+    const {
+      birthDate,
+      gender,
+      specializations,
+      yearsOfExperience,
+      workSchedule,
+      certifications,
+      biography,
+      workLocation,
+      pricePerHour,
+      languages,
+      instagram,
+      linkedin
+    } = req.body;
+
+    // Buscar preferências do personal
+    const personalProfile = await prisma.preferenciasPersonal.findUnique({
+      where: { userId: req.userId }
+    });
+
+    if (!personalProfile) {
+      return res.status(404).json({ error: "Perfil de personal não encontrado" });
+    }
+
+    // Verificar e converter a data se fornecida
+    let parsedBirthDate;
+    if (birthDate) {
+      try {
+        if (typeof birthDate === 'string' && birthDate.includes('/')) {
+          const [day, month, year] = birthDate.split('/');
+          parsedBirthDate = new Date(`${year}-${month}-${day}`);
+        } else {
+          parsedBirthDate = new Date(birthDate);
+        }
+        
+        if (isNaN(parsedBirthDate)) {
+          return res.status(400).json({ error: "Formato de data inválido para birthDate" });
+        }
+      } catch (error) {
+        return res.status(400).json({ error: "Formato de data inválido" });
+      }
+    }
+
+    // Dados a serem atualizados
+    const updateData = {
+      ...(parsedBirthDate && { birthDate: parsedBirthDate }),
+      ...(gender && { gender }),
+      ...(specializations !== undefined && { specializations }),
+      ...(yearsOfExperience !== undefined && { yearsOfExperience }),
+      ...(workSchedule !== undefined && { workSchedule }),
+      ...(certifications !== undefined && { certifications }),
+      ...(biography !== undefined && { biography }),
+      ...(workLocation !== undefined && { workLocation }),
+      ...(pricePerHour !== undefined && { pricePerHour }),
+      ...(languages !== undefined && { languages }),
+      ...(instagram !== undefined && { instagram }),
+      ...(linkedin !== undefined && { linkedin })
+    };
+
+    // Atualizar perfil do personal
+    const updatedPersonal = await prisma.preferenciasPersonal.update({
+      where: { id: personalProfile.id },
+      data: updateData
+    });
+
+    res.status(200).json({
+      message: "Perfil atualizado com sucesso",
+      personal: updatedPersonal
+    });
+  } catch (err) {
+    console.error("Erro ao atualizar perfil:", err);
+    res.status(500).json({ error: "Erro ao atualizar perfil" });
   }
 });
 

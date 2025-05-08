@@ -129,6 +129,60 @@ router.post("/academia/perfil", [isAcademia], async (req, res) => {
   }
 });
 
+// Rota para editar perfil da academia (campos específicos)
+router.put("/academia/editar-perfil", [isAcademia], async (req, res) => {
+  try {
+    const { 
+      endereco, 
+      telefone, 
+      horarioFuncionamento, 
+      descricao, 
+      comodidades, 
+      planos, 
+      website, 
+      instagram, 
+      facebook 
+    } = req.body;
+
+    // Buscar academia do usuário
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: { academia: true }
+    });
+
+    if (!user.academia) {
+      return res.status(404).json({ error: "Perfil de academia não encontrado" });
+    }
+
+    // Dados a serem atualizados
+    const updateData = {
+      ...(endereco !== undefined && { endereco }),
+      ...(telefone !== undefined && { telefone }),
+      ...(horarioFuncionamento !== undefined && { horarioFuncionamento }),
+      ...(descricao !== undefined && { descricao }),
+      ...(comodidades !== undefined && { comodidades }),
+      ...(planos !== undefined && { planos }),
+      ...(website !== undefined && { website }),
+      ...(instagram !== undefined && { instagram }),
+      ...(facebook !== undefined && { facebook })
+    };
+
+    // Atualizar academia
+    const updatedAcademia = await prisma.academia.update({
+      where: { id: user.academia.id },
+      data: updateData
+    });
+
+    res.status(200).json({
+      message: "Perfil atualizado com sucesso",
+      academia: updatedAcademia
+    });
+  } catch (err) {
+    console.error("Erro ao atualizar perfil de academia:", err);
+    res.status(500).json({ error: "Erro ao atualizar perfil de academia" });
+  }
+});
+
 // Buscar dados de uma academia específica
 router.get("/academia/detalhes/:academiaId", async (req, res) => {
   try {

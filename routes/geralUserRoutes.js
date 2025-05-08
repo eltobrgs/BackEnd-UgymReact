@@ -81,7 +81,6 @@ router.get("/personais/listar", async (req, res) => {
       name: personal.user.name,
       email: personal.user.email,
       cref: personal.cref,
-      specialization: personal.specialization,
       specializations: personal.specializations || [],
       yearsOfExperience: personal.yearsOfExperience || "N/A",
       workLocation: personal.workLocation || "N/A",

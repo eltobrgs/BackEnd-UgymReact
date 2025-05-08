@@ -124,6 +124,85 @@ router.get("/aluno/preferencias", async (req, res) => {
   }
 });
 
+// Rota para editar perfil do aluno
+router.put("/aluno/editar-perfil", [isAluno], async (req, res) => {
+  try {
+    const { 
+      birthDate, 
+      gender, 
+      goal, 
+      healthCondition, 
+      experience, 
+      activityLevel, 
+      physicalLimitations
+    } = req.body;
+
+    console.log('Corpo da requisição recebido:', req.body);
+
+    // Buscar preferências do aluno
+    const userPreferences = await prisma.preferenciasAluno.findUnique({
+      where: { userId: req.userId }
+    });
+
+    if (!userPreferences) {
+      return res.status(404).json({ error: "Perfil de aluno não encontrado" });
+    }
+
+    // Verificar e converter a data se fornecida
+    let parsedBirthDate;
+    if (birthDate) {
+      try {
+        if (typeof birthDate === 'string' && birthDate.includes('/')) {
+          const [day, month, year] = birthDate.split('/');
+          parsedBirthDate = new Date(`${year}-${month}-${day}`);
+        } else {
+          parsedBirthDate = new Date(birthDate);
+        }
+        
+        if (isNaN(parsedBirthDate)) {
+          console.error('Data inválida:', birthDate);
+          return res.status(400).json({ error: "Formato de data inválido para birthDate" });
+        }
+      } catch (error) {
+        console.error('Erro ao processar data:', error);
+        return res.status(400).json({ error: "Formato de data inválido" });
+      }
+    }
+
+    console.log('Data formatada:', parsedBirthDate);
+
+    // Dados a serem atualizados
+    const updateData = {};
+    
+    // Adicionar apenas os campos que foram fornecidos
+    if (parsedBirthDate) updateData.birthDate = parsedBirthDate;
+    if (gender !== undefined) updateData.gender = gender;
+    if (goal !== undefined) updateData.goal = goal;
+    if (healthCondition !== undefined) updateData.healthCondition = healthCondition;
+    if (experience !== undefined) updateData.experience = experience;
+    if (activityLevel !== undefined) updateData.activityLevel = activityLevel;
+    if (physicalLimitations !== undefined) updateData.physicalLimitations = physicalLimitations;
+
+    console.log('Dados a serem atualizados:', updateData);
+
+    // Atualizar preferências
+    const updatedPreferences = await prisma.preferenciasAluno.update({
+      where: { id: userPreferences.id },
+      data: updateData
+    });
+
+    console.log('Perfil atualizado com sucesso');
+
+    res.status(200).json({
+      message: "Perfil atualizado com sucesso",
+      preferences: updatedPreferences
+    });
+  } catch (err) {
+    console.error("Erro ao atualizar perfil:", err);
+    res.status(500).json({ error: "Erro ao atualizar perfil" });
+  }
+});
+
 // Salvar/atualizar preferências do aluno
 router.post("/aluno/preferencias", async (req, res) => {
   try {
@@ -135,8 +214,7 @@ router.post("/aluno/preferencias", async (req, res) => {
       experience, 
       height, 
       weight, 
-      activityLevel, 
-      medicalConditions, 
+      activityLevel,  
       physicalLimitations,
       academiaId,
       alunoId // ID do aluno quando academia está editando
@@ -210,7 +288,6 @@ router.post("/aluno/preferencias", async (req, res) => {
       height,
       weight,
       activityLevel,
-      medicalConditions,
       physicalLimitations,
       academiaId: academiaIdParsed
     };
@@ -706,49 +783,58 @@ router.get("/aluno/dashboard-stats", [isAluno], async (req, res) => {
 // Obter personal responsável do aluno
 router.get("/aluno/personal-responsavel", [isAluno], async (req, res) => {
   try {
-    // Buscar preferências do aluno
-    const alunoPreferencias = await prisma.preferenciasAluno.findUnique({
-      where: { userId: req.userId },
+    // Buscar preferências do aluno para obter o ID do personal vinculado
+    const preferences = await prisma.preferenciasAluno.findUnique({
+      where: { userId: req.userId }
+    });
+
+    if (!preferences) {
+      return res.status(404).json({ error: "Preferências de aluno não encontradas" });
+    }
+
+    // Verificar se há um personal vinculado
+    if (!preferences.personalId) {
+      return res.status(404).json({ error: "Aluno não possui personal vinculado" });
+    }
+
+    // Buscar dados completos do personal
+    const personal = await prisma.preferenciasPersonal.findUnique({
+      where: { id: preferences.personalId },
       include: {
-        personal: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                imageUrl: true
-              }
-            }
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
           }
         }
       }
     });
 
-    if (!alunoPreferencias) {
-      return res.status(404).json({ error: "Perfil de aluno não encontrado" });
+    if (!personal) {
+      return res.status(404).json({ error: "Personal não encontrado" });
     }
 
-    if (!alunoPreferencias.personal) {
-      return res.status(404).json({ error: "Aluno não possui personal responsável" });
-    }
-
-    // Formatar dados do personal para retorno
-    const personal = {
-      id: alunoPreferencias.personal.user.id,
-      name: alunoPreferencias.personal.user.name,
-      email: alunoPreferencias.personal.user.email,
-      imageUrl: alunoPreferencias.personal.user.imageUrl,
-      cref: alunoPreferencias.personal.cref,
-      specialization: alunoPreferencias.personal.specialization,
-      yearsOfExperience: alunoPreferencias.personal.yearsOfExperience,
-      workLocation: alunoPreferencias.personal.workLocation,
-      pricePerHour: alunoPreferencias.personal.pricePerHour,
-      workSchedule: alunoPreferencias.personal.workSchedule,
-      rating: 4.8 // Rating fixo para exemplo, poderia ser calculado com base em avaliações
+    // Formatar resposta
+    const formattedPersonal = {
+      id: personal.user.id,
+      personalId: personal.id,
+      name: personal.user.name,
+      email: personal.user.email,
+      cref: personal.cref,
+      specializations: personal.specializations,
+      yearsOfExperience: personal.yearsOfExperience,
+      workSchedule: personal.workSchedule,
+      certifications: personal.certifications,
+      biography: personal.biography,
+      workLocation: personal.workLocation,
+      pricePerHour: personal.pricePerHour,
+      languages: personal.languages,
+      instagram: personal.instagram,
+      linkedin: personal.linkedin,
     };
 
-    res.status(200).json(personal);
+    res.status(200).json(formattedPersonal);
   } catch (err) {
     console.error("Erro ao buscar personal responsável:", err);
     res.status(500).json({ error: "Erro ao buscar personal responsável" });

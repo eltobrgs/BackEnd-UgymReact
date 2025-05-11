@@ -10,7 +10,8 @@
     "migrate": "npx prisma migrate dev",
     "seed": "bun run scripts/seed.js",
     "delete": "bun run scripts/deleteData.js",
-    "reset": "bun run scripts/deleteData.js && bun run scripts/seed.js"
+    "reset": "bun run scripts/deleteData.js && bun run scripts/seed.js",
+    "create-buckets": "node scripts/createBuckets.js"
   },
   "prisma": {
     "seed": "bun run scripts/seed.js"
@@ -22,10 +23,13 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^6.2.1",
+    "@supabase/supabase-js": "^2.39.7",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^4.21.2",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
     "prisma": "^6.2.1"

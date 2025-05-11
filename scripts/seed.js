@@ -3,6 +3,21 @@ import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+// Array de URLs de imagens para perfis
+const imagensPerfil = [
+  'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+  'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+  'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?q=80&w=2875&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+  'https://images.unsplash.com/photo-1593079831268-3381b0db4a77?q=80&w=2938&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+  'https://images.unsplash.com/photo-1548690312-e3b507d8c110?q=80&w=2874&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
+];
+
+// Array de URLs de imagens para academias
+const imagensAcademia = [
+  'https://images.unsplash.com/photo-1540497077202-7c8a3999166f?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+  'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+  'https://images.unsplash.com/photo-1570829460005-c840387bb1ca?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
+];
 
 async function criarAcademias() {
   const academias = [
@@ -20,7 +35,8 @@ async function criarAcademias() {
         planos: ['Mensal: R$ 99,90', 'Trimestral: R$ 269,90', 'Anual: R$ 899,90'],
         website: 'www.fitnesstotal.com.br',
         instagram: 'fitnesstotal',
-        facebook: 'academiaFitnessTotal'
+        facebook: 'academiaFitnessTotal',
+        academiaAvatar: imagensAcademia[0]
       }
     },
     {
@@ -37,7 +53,8 @@ async function criarAcademias() {
         planos: ['Mensal: R$ 89,90', 'Semestral: R$ 479,90', 'Anual: R$ 859,90'],
         website: 'www.powergym.com.br',
         instagram: 'powergym',
-        facebook: 'powerGymAcademia'
+        facebook: 'powerGymAcademia',
+        academiaAvatar: imagensAcademia[1]
       }
     }
   ];
@@ -66,7 +83,8 @@ async function criarAcademias() {
             planos: academia.academia.planos,
             website: academia.academia.website,
             instagram: academia.academia.instagram,
-            facebook: academia.academia.facebook
+            facebook: academia.academia.facebook,
+            academiaAvatar: academia.academia.academiaAvatar
             }
           }
       },
@@ -84,6 +102,7 @@ async function criarAcademias() {
     console.log(`- Email: ${academia.email}`);
     console.log(`- Senha: ${academia.password}`);
     console.log(`- ID: ${savedAcademia.academia.id}`);
+    console.log(`- Avatar: ${academia.academia.academiaAvatar}`);
     console.log("------------------------------");
   }
 
@@ -122,6 +141,9 @@ async function criarPersonais(academias) {
       const hash = await bcrypt.hash('123456', salt);
 
       const email = `${personalInfo.email}@${academia.name.toLowerCase().replace(/\s+/g, '')}.com`;
+      
+      // Selecionar uma imagem de perfil aleatória
+      const personalAvatar = imagensPerfil[Math.floor(Math.random() * imagensPerfil.length)];
 
       const savedPersonal = await prisma.user.create({
         data: {
@@ -144,7 +166,8 @@ async function criarPersonais(academias) {
               languages: ['Português', Math.random() > 0.5 ? 'Inglês' : 'Espanhol'],
               instagram: personalInfo.email.toLowerCase(),
               linkedin: `https://linkedin.com/in/${personalInfo.email.toLowerCase()}`,
-              academiaId: academia.id
+              academiaId: academia.id,
+              personalAvatar: personalAvatar
             }
           }
         },
@@ -164,6 +187,7 @@ async function criarPersonais(academias) {
       console.log(`- Senha: 123456`);
       console.log(`- CREF: ${personalInfo.cref}`);
       console.log(`- Especialização: ${personalInfo.especializacao}`);
+      console.log(`- Avatar: ${personalAvatar}`);
       console.log("------------------------------");
     }
     
@@ -224,6 +248,9 @@ async function criarAlunos(academiaComPersonais) {
       const associarAPersonal = Math.random() > 0.33;
       
       const email = `${alunoInfo.email}@${academiaDados.academiaNome.toLowerCase().replace(/\s+/g, '')}.com`;
+      
+      // Selecionar uma imagem de perfil aleatória
+      const alunoAvatar = imagensPerfil[Math.floor(Math.random() * imagensPerfil.length)];
 
       const savedAluno = await prisma.user.create({
         data: {
@@ -241,7 +268,8 @@ async function criarAlunos(academiaComPersonais) {
               activityLevel: ['Leve', 'Moderado', 'Intenso'][Math.floor(Math.random() * 3)],
               physicalLimitations: 'Nenhuma',
               personalId: associarAPersonal ? personal.preferenciasId : null,
-              academiaId: academiaDados.academiaId
+              academiaId: academiaDados.academiaId,
+              alunoAvatar: alunoAvatar
             }
           }
         },
@@ -261,6 +289,7 @@ async function criarAlunos(academiaComPersonais) {
       console.log(`- Email: ${email}`);
       console.log(`- Senha: 123456`);
       console.log(`- Objetivo: ${objetivo}`);
+      console.log(`- Avatar: ${alunoAvatar}`);
       if (associarAPersonal) {
         console.log(`- Personal vinculado: ${personal.name}`);
       } else {

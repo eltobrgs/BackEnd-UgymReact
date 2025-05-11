@@ -35,6 +35,7 @@ model PreferenciasAluno {
   userId              Int                   @unique @map("user_id")
   personalId          Int?
   academiaId          Int?                  @map("academia_id")
+  alunoAvatar         String?               @map("aluno_avatar")
   pagamentos          Pagamento[]
   academia            Academia?             @relation(fields: [academiaId], references: [id])
   personal            PreferenciasPersonal? @relation(fields: [personalId], references: [id])
@@ -62,6 +63,7 @@ model PreferenciasPersonal {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   academiaId        Int?                @map("academia_id")
+  personalAvatar    String?             @map("personal_avatar")
   students          PreferenciasAluno[]
   academia          Academia?           @relation(fields: [academiaId], references: [id])
   user              User                @relation(fields: [userId], references: [id])
@@ -80,6 +82,7 @@ model Academia {
   website              String?
   instagram            String?
   facebook             String?
+  academiaAvatar       String?                @map("academia_avatar")
   userId               Int                    @unique @map("user_id")
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
@@ -126,6 +129,8 @@ model Exercicio {
   repsPerSet Int
   status     String
   image      String
+  videoUrl   String?  @map("video_url")
+  gifUrl     String?  @map("gif_url")
   treinoId   Int      @map("treino_id")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

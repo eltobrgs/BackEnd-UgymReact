@@ -4,7 +4,13 @@ import alunoRoutes from './routes/alunoRoutes.js';
 import personalRoutes from './routes/personalRoutes.js';
 import academiaRoutes from './routes/academiaRoutes.js';
 import geralUserRoutes from './routes/geralUserRoutes.js';
+import storageRoutes from './routes/storageRoutes.js';
 import cors from 'cors';
+import dotenv from 'dotenv';
+
+// Carrega variáveis de ambiente
+dotenv.config();
+
 const app = express();
 
 // Middleware para JSON
@@ -17,6 +23,7 @@ app.use('/', alunoRoutes); // Rotas para alunos
 app.use('/', personalRoutes); // Rotas para personal trainers
 app.use('/', academiaRoutes); // Rotas para academias
 app.use('/', geralUserRoutes); // Rotas gerais para qualquer usuário autenticado
+app.use('/', storageRoutes); // Rotas para upload e gerenciamento de arquivos
 
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;

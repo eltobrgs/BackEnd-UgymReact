@@ -758,4 +758,106 @@ router.get("/users-for-tasks", async (req, res) => {
   }
 });
 
+// Endpoint para excluir perfil do usuário
+router.delete("/excluir-perfil", async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    // Verificar se o usuário existe
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        preferenciasAluno: true,
+        preferenciasPersonal: true,
+        academia: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
+
+    // Realizar exclusão em cascata dependendo do tipo de usuário
+    if (user.role === 'ALUNO' && user.preferenciasAluno) {
+      // Remover vinculações com personais, se existirem
+      await prisma.preferenciasAluno.update({
+        where: { id: user.preferenciasAluno.id },
+        data: {
+          personalId: null,
+          academiaId: null
+        }
+      });
+
+      // Excluir registros relacionados ao aluno
+      await prisma.$transaction([
+        prisma.report.deleteMany({
+          where: { alunoId: user.preferenciasAluno.id }
+        }),
+        prisma.treino.deleteMany({
+          where: { alunoId: user.preferenciasAluno.id }
+        }),
+        prisma.pagamento.deleteMany({
+          where: { alunoId: user.preferenciasAluno.id }
+        }),
+        prisma.preferenciasAluno.delete({
+          where: { id: user.preferenciasAluno.id }
+        })
+      ]);
+    } 
+    else if (user.role === 'PERSONAL' && user.preferenciasPersonal) {
+      // Remover a vinculação de alunos com este personal
+      await prisma.preferenciasAluno.updateMany({
+        where: { personalId: user.preferenciasPersonal.id },
+        data: { personalId: null }
+      });
+
+      // Excluir registros relacionados ao personal
+      await prisma.$transaction([
+        prisma.report.updateMany({
+          where: { personalId: user.preferenciasPersonal.id },
+          data: { personalId: null }
+        }),
+        prisma.preferenciasPersonal.delete({
+          where: { id: user.preferenciasPersonal.id }
+        })
+      ]);
+    } 
+    else if (user.role === 'ACADEMIA' && user.academia) {
+      // Remover a vinculação de alunos e personais com esta academia
+      await prisma.preferenciasAluno.updateMany({
+        where: { academiaId: user.academia.id },
+        data: { academiaId: null }
+      });
+      
+      await prisma.preferenciasPersonal.updateMany({
+        where: { academiaId: user.academia.id },
+        data: { academiaId: null }
+      });
+
+      // Excluir registros relacionados à academia
+      await prisma.$transaction([
+        prisma.pagamento.deleteMany({
+          where: { academiaId: user.academia.id }
+        }),
+        prisma.evento.deleteMany({
+          where: { academiaId: user.academia.id }
+        }),
+        prisma.academia.delete({
+          where: { id: user.academia.id }
+        })
+      ]);
+    }
+
+    // Excluir o usuário após remover todas as dependências
+    await prisma.user.delete({
+      where: { id: userId }
+    });
+
+    res.status(200).json({ message: "Perfil excluído com sucesso" });
+  } catch (err) {
+    console.error("Erro ao excluir perfil:", err);
+    res.status(500).json({ error: "Erro ao excluir perfil" });
+  }
+});
+
 export default router; 

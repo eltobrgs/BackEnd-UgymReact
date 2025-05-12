@@ -940,4 +940,104 @@ router.put('/pagamentos/:id', [isAcademia], async (req, res) => {
   }
 });
 
+// Rota para desvincular um aluno da academia
+router.delete("/desvincular-aluno-academia/:alunoId", [isAcademia], async (req, res) => {
+  try {
+    const { alunoId } = req.params;
+    const alunoIdInt = parseInt(alunoId);
+
+    if (isNaN(alunoIdInt)) {
+      return res.status(400).json({ error: "ID de aluno inválido" });
+    }
+
+    // Buscar academia do usuário logado
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: { academia: true }
+    });
+
+    if (!user.academia) {
+      return res.status(404).json({ error: "Perfil de academia não encontrado" });
+    }
+
+    // Verificar se o aluno está vinculado à academia
+    const aluno = await prisma.preferenciasAluno.findFirst({
+      where: { 
+        userId: alunoIdInt,
+        academiaId: user.academia.id 
+      }
+    });
+
+    if (!aluno) {
+      return res.status(404).json({ error: "Aluno não encontrado ou não está vinculado a esta academia" });
+    }
+
+    // Verificar se o aluno está vinculado a algum personal
+    // Atualizar o aluno removendo a associação com o personal, se existir
+    await prisma.preferenciasAluno.update({
+      where: { userId: alunoIdInt },
+      data: { 
+        academiaId: null,
+        personalId: null 
+      }
+    });
+
+    res.status(200).json({ message: "Aluno desvinculado da academia com sucesso" });
+  } catch (err) {
+    console.error("Erro ao desvincular aluno:", err);
+    res.status(500).json({ error: "Erro ao desvincular aluno da academia" });
+  }
+});
+
+// Rota para desvincular um personal da academia
+router.delete("/desvincular-personal-academia/:personalId", [isAcademia], async (req, res) => {
+  try {
+    const { personalId } = req.params;
+    const personalIdInt = parseInt(personalId);
+
+    if (isNaN(personalIdInt)) {
+      return res.status(400).json({ error: "ID de personal inválido" });
+    }
+
+    // Buscar academia do usuário logado
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: { academia: true }
+    });
+
+    if (!user.academia) {
+      return res.status(404).json({ error: "Perfil de academia não encontrado" });
+    }
+
+    // Verificar se o personal está vinculado à academia
+    const personal = await prisma.preferenciasPersonal.findFirst({
+      where: { 
+        userId: personalIdInt,
+        academiaId: user.academia.id 
+      }
+    });
+
+    if (!personal) {
+      return res.status(404).json({ error: "Personal não encontrado ou não está vinculado a esta academia" });
+    }
+
+    // Buscar todos os alunos vinculados a este personal e remover o vínculo
+    await prisma.preferenciasAluno.updateMany({
+      where: { personalId: personal.id },
+      data: { personalId: null }
+    });
+
+    // Desvincular o personal da academia
+    await prisma.preferenciasPersonal.update({
+      where: { userId: personalIdInt },
+      data: { academiaId: null }
+    });
+
+    res.status(200).json({ message: "Personal desvinculado da academia com sucesso" });
+  } catch (err) {
+    console.error("Erro ao desvincular personal:", err);
+    res.status(500).json({ error: "Erro ao desvincular personal da academia" });
+  }
+});
+
 export default router; 

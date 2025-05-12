@@ -268,11 +268,64 @@ router.get("/personal/meus-alunos", [isPersonal], async (req, res) => {
       }
     });
 
+    // Buscar relatórios para todos os alunos encontrados
+    const alunosIds = students.map(student => student.preferenciasAluno?.id).filter(Boolean);
+    
+    // Mapa para armazenar os relatórios mais recentes por tipo para cada aluno
+    const latestReportsByStudent = new Map();
+    
+    if (alunosIds.length > 0) {
+      // Buscar todos os relatórios de peso e altura para os alunos
+      const reports = await prisma.report.findMany({
+        where: {
+          alunoId: { in: alunosIds },
+          tipo: { in: ['peso', 'altura', 'IMC'] }
+        },
+        orderBy: {
+          data: 'desc'
+        }
+      });
+      
+      // Organizar os relatórios mais recentes por aluno e tipo
+      reports.forEach(report => {
+        if (!latestReportsByStudent.has(report.alunoId)) {
+          latestReportsByStudent.set(report.alunoId, {});
+        }
+        
+        const studentReports = latestReportsByStudent.get(report.alunoId);
+        if (!studentReports[report.tipo]) {
+          studentReports[report.tipo] = report;
+        }
+      });
+      
+      console.log(`Relatórios encontrados para ${latestReportsByStudent.size} alunos`);
+    }
+
     // Formatar dados para exibição
     const formattedStudents = students.map(student => {
       const age = student.preferenciasAluno?.birthDate
         ? Math.floor((new Date() - new Date(student.preferenciasAluno.birthDate)) / (1000 * 60 * 60 * 24 * 365.25))
         : null;
+
+      // Buscar relatórios mais recentes para este aluno
+      const studentReports = latestReportsByStudent.get(student.preferenciasAluno?.id) || {};
+      
+      // Extrair valores dos relatórios mais recentes
+      const latestWeight = studentReports.peso ? `${studentReports.peso.valor} kg` : 'Não informado';
+      const latestHeight = studentReports.altura ? `${studentReports.altura.valor} cm` : 'Não informado';
+      
+      // Calcular IMC se tiver peso e altura
+      let imc = studentReports.IMC ? studentReports.IMC.valor : null;
+      
+      // Se não tiver IMC mas tiver peso e altura, calcular
+      if (!imc && studentReports.peso && studentReports.altura) {
+        const weightValue = studentReports.peso.valor;
+        const heightValue = studentReports.altura.valor / 100; // cm para metros
+        imc = weightValue / (heightValue * heightValue);
+        imc = parseFloat(imc.toFixed(2));
+      }
+      
+      const imcDisplay = imc ? `${imc}` : 'Não calculado';
 
       return {
         id: student.preferenciasAluno.id,
@@ -280,10 +333,12 @@ router.get("/personal/meus-alunos", [isPersonal], async (req, res) => {
         name: student.name,
         email: student.email,
         age: age || 'Não informado',
-        weight: student.preferenciasAluno?.weight || 'Não informado',
-        height: student.preferenciasAluno?.height || 'Não informado',
+        weight: latestWeight,
+        height: latestHeight,
+        imc: imcDisplay,
         goal: student.preferenciasAluno?.goal || 'Não informado',
-        trainingTime: student.preferenciasAluno?.experience || 'Iniciante'
+        trainingTime: student.preferenciasAluno?.experience || 'Iniciante',
+        imageUrl: student.preferenciasAluno?.alunoAvatar || null
       };
     });
 
@@ -604,6 +659,57 @@ router.delete("/personal/treinos/:alunoId/:diaSemana", [isPersonal], async (req,
   } catch (err) {
     console.error("Erro ao excluir treino:", err);
     res.status(500).json({ error: "Erro ao excluir treino" });
+  }
+});
+
+// Buscar um treino específico por dia da semana
+router.get("/personal/treino/:alunoId/:diaSemana", [isPersonal], async (req, res) => {
+  try {
+    const { alunoId, diaSemana } = req.params;
+
+    // Buscar personal
+    const personal = await prisma.preferenciasPersonal.findUnique({
+      where: { userId: req.userId }
+    });
+
+    if (!personal) {
+      return res.status(404).json({ error: "Perfil de personal não encontrado" });
+    }
+
+    // Verificar se o aluno está vinculado ao personal
+    const aluno = await prisma.preferenciasAluno.findFirst({
+      where: {
+        id: parseInt(alunoId),
+        personalId: personal.id
+      }
+    });
+
+    if (!aluno) {
+      return res.status(404).json({ error: "Aluno não encontrado ou não está vinculado a este personal" });
+    }
+
+    // Buscar treino do dia específico
+    const treino = await prisma.treino.findFirst({
+      where: {
+        alunoId: parseInt(alunoId),
+        diaSemana: parseInt(diaSemana)
+      },
+      include: {
+        exercicios: true
+      }
+    });
+
+    if (!treino) {
+      return res.status(404).json({ error: "Treino não encontrado para este dia" });
+    }
+
+    res.status(200).json({
+      message: "Treino encontrado com sucesso",
+      treino
+    });
+  } catch (err) {
+    console.error("Erro ao buscar treino:", err);
+    res.status(500).json({ error: "Erro ao buscar treino" });
   }
 });
 
@@ -1441,6 +1547,52 @@ router.post("/personal/aluno/:alunoId/sync-imc", [isPersonal], async (req, res) 
   } catch (err) {
     console.error("Erro ao sincronizar relatórios de IMC:", err);
     res.status(500).json({ error: "Erro ao sincronizar relatórios de IMC" });
+  }
+});
+
+// Rota para desvincular um aluno do personal
+router.delete("/desvincular-aluno-personal/:alunoId", [isPersonal], async (req, res) => {
+  try {
+    const { alunoId } = req.params;
+    const alunoIdInt = parseInt(alunoId);
+
+    if (isNaN(alunoIdInt)) {
+      return res.status(400).json({ error: "ID de aluno inválido" });
+    }
+
+    // Buscar preferências do personal
+    const personal = await prisma.preferenciasPersonal.findUnique({
+      where: { userId: req.userId }
+    });
+
+    if (!personal) {
+      return res.status(404).json({ error: "Perfil de personal não encontrado" });
+    }
+
+    // Verificar se o aluno está vinculado ao personal
+    const aluno = await prisma.preferenciasAluno.findFirst({
+      where: { 
+        id: alunoIdInt,
+        personalId: personal.id 
+      }
+    });
+
+    if (!aluno) {
+      return res.status(404).json({ error: "Aluno não está vinculado a este personal" });
+    }
+
+    // Desvincular o aluno do personal
+    await prisma.preferenciasAluno.update({
+      where: { id: alunoIdInt },
+      data: { personalId: null }
+    });
+
+    console.log(`Aluno ${alunoIdInt} desvinculado do personal ${personal.id}`);
+
+    res.status(200).json({ message: "Aluno desvinculado do personal com sucesso" });
+  } catch (err) {
+    console.error("Erro ao desvincular aluno do personal:", err);
+    res.status(500).json({ error: "Erro ao desvincular aluno do personal" });
   }
 });
 

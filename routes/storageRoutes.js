@@ -404,4 +404,174 @@ router.post('/upload/exercise-media', authenticateToken, upload.single('media'),
   }
 });
 
+/**
+ * Rota para adicionar URL de vídeo do YouTube a um exercício
+ */
+router.post('/exercicios/:exercicioId/youtube-video', authenticateToken, async (req, res) => {
+  try {
+    const { exercicioId } = req.params;
+    const { videoUrl } = req.body;
+    const userId = req.user.id;
+
+    if (!videoUrl) {
+      return res.status(400).json({ error: 'URL do vídeo é obrigatória' });
+    }
+
+    // Verificar se a URL é do formato de incorporação do YouTube
+    if (!videoUrl.includes('youtube.com/embed/')) {
+      return res.status(400).json({ error: 'URL inválida. Deve ser uma URL de incorporação do YouTube (youtube.com/embed/...)' });
+    }
+
+    // Verifica se o usuário tem permissão (personal ou academia)
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user || (user.role !== 'PERSONAL' && user.role !== 'ACADEMIA')) {
+      return res.status(403).json({ error: 'Sem permissão para adicionar vídeo ao exercício' });
+    }
+
+    // Verifica se o exercício existe
+    const exercicio = await prisma.exercicio.findUnique({
+      where: { id: parseInt(exercicioId) }
+    });
+
+    if (!exercicio) {
+      return res.status(404).json({ error: 'Exercício não encontrado' });
+    }
+
+    // Atualiza o campo videoUrl no banco de dados
+    await prisma.exercicio.update({
+      where: { id: parseInt(exercicioId) },
+      data: { videoUrl }
+    });
+
+    res.json({ 
+      message: 'URL do vídeo do YouTube adicionada com sucesso',
+      url: videoUrl 
+    });
+  } catch (error) {
+    console.error('Erro ao adicionar URL do YouTube:', error);
+    res.status(500).json({ error: 'Erro ao processar a adição da URL do YouTube' });
+  }
+});
+
+
+/**
+ * Rota para criar/atualizar exercício com mídias em uma única requisição
+ * Esta rota permite adicionar um exercício com suas mídias em uma única operação
+ */
+router.post('/exercicio-com-midia', authenticateToken, upload.single('media'), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { 
+      treinoId, 
+      name, 
+      sets, 
+      time, 
+      restTime, 
+      repsPerSet, 
+      status, 
+      mediaType, 
+      youtubeUrl 
+    } = req.body;
+
+    // Verificar se o usuário tem permissão (personal ou academia)
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user || (user.role !== 'PERSONAL' && user.role !== 'ACADEMIA')) {
+      return res.status(403).json({ error: 'Sem permissão para adicionar exercício' });
+    }
+
+    // Verificar dados obrigatórios do exercício
+    if (!name || !sets || !time || !restTime || !repsPerSet || !treinoId) {
+      return res.status(400).json({ error: 'Dados do exercício incompletos' });
+    }
+
+    // Verificar se o treino existe
+    const treino = await prisma.treino.findUnique({
+      where: { id: parseInt(treinoId) },
+      include: { aluno: true }
+    });
+
+    if (!treino) {
+      return res.status(404).json({ error: 'Treino não encontrado' });
+    }
+
+    // Se for personal, verificar se o aluno do treino está vinculado a ele
+    if (user.role === 'PERSONAL') {
+      const personal = await prisma.preferenciasPersonal.findUnique({
+        where: { userId: userId }
+      });
+
+      if (!personal) {
+        return res.status(404).json({ error: 'Perfil de personal não encontrado' });
+      }
+
+      if (treino.aluno.personalId !== personal.id) {
+        return res.status(403).json({ error: 'Este treino pertence a um aluno não vinculado a este personal' });
+      }
+    }
+
+    // Preparar dados do exercício
+    const exercicioData = {
+      name,
+      sets: parseInt(sets),
+      time,
+      restTime,
+      repsPerSet: parseInt(repsPerSet),
+      status: status || 'not-started',
+      treinoId: parseInt(treinoId),
+      image: 'https://via.placeholder.com/150' // Imagem padrão
+    };
+
+    // Processar mídia, se houver
+    let fileUrl = null;
+    
+    // Processar arquivo de mídia enviado
+    if (req.file && mediaType) {
+      if (!['image', 'video', 'gif'].includes(mediaType)) {
+        return res.status(400).json({ error: 'Tipo de mídia inválido. Use: image, video ou gif' });
+      }
+
+      // Fazer upload do arquivo
+      fileUrl = await uploadFile(
+        req.file.buffer,
+        req.file.originalname,
+        'exercises-media',
+        mediaType === 'image' ? 'images' : mediaType === 'video' ? 'videos' : 'gifs'
+      );
+
+      // Adicionar URL da mídia aos dados do exercício
+      if (mediaType === 'image') {
+        exercicioData.image = fileUrl;
+      } else if (mediaType === 'video') {
+        exercicioData.videoUrl = fileUrl;
+      } else if (mediaType === 'gif') {
+        exercicioData.gifUrl = fileUrl;
+      }
+    }
+    
+    // Processar URL do YouTube, se fornecida
+    if (youtubeUrl && youtubeUrl.includes('youtube.com/embed/')) {
+      exercicioData.videoUrl = youtubeUrl;
+    }
+
+    // Criar o exercício com todos os dados
+    const novoExercicio = await prisma.exercicio.create({
+      data: exercicioData
+    });
+
+    res.status(201).json({
+      message: 'Exercício criado com sucesso',
+      exercicio: novoExercicio
+    });
+  } catch (error) {
+    console.error('Erro ao criar exercício com mídia:', error);
+    res.status(500).json({ error: 'Erro ao processar a criação do exercício com mídia' });
+  }
+});
+
 export default router; 

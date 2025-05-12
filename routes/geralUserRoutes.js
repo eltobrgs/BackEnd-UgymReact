@@ -87,7 +87,8 @@ router.get("/personais/listar", async (req, res) => {
       pricePerHour: personal.pricePerHour || "N/A",
       biography: personal.biography || "",
       instagram: personal.instagram || "",
-      linkedin: personal.linkedin || ""
+      linkedin: personal.linkedin || "",
+      imageUrl: personal.personalAvatar || null
     }));
 
     res.status(200).json(formattedPersonals);
@@ -192,19 +193,73 @@ router.get("/alunos/listar", async (req, res) => {
 
     console.log(`Total de alunos encontrados: ${students.length}`);
 
+    // Buscar relatórios para todos os alunos encontrados
+    const alunosIds = students.map(student => student.preferenciasAluno?.id).filter(Boolean);
+    
+    // Mapa para armazenar os relatórios mais recentes por tipo para cada aluno
+    const latestReportsByStudent = new Map();
+    
+    if (alunosIds.length > 0) {
+      // Buscar todos os relatórios de peso e altura para os alunos
+      const reports = await prisma.report.findMany({
+        where: {
+          alunoId: { in: alunosIds },
+          tipo: { in: ['peso', 'altura', 'IMC'] }
+        },
+        orderBy: {
+          data: 'desc'
+        }
+      });
+      
+      // Organizar os relatórios mais recentes por aluno e tipo
+      reports.forEach(report => {
+        if (!latestReportsByStudent.has(report.alunoId)) {
+          latestReportsByStudent.set(report.alunoId, {});
+        }
+        
+        const studentReports = latestReportsByStudent.get(report.alunoId);
+        if (!studentReports[report.tipo]) {
+          studentReports[report.tipo] = report;
+        }
+      });
+      
+      console.log(`Relatórios encontrados para ${latestReportsByStudent.size} alunos`);
+    }
+
     // Formatar dados para exibição
     const formattedStudents = students.map(student => {
       const age = student.preferenciasAluno?.birthDate
         ? Math.floor((new Date() - new Date(student.preferenciasAluno.birthDate)) / (1000 * 60 * 60 * 24 * 365.25))
         : null;
+      
+      // Buscar relatórios mais recentes para este aluno
+      const studentReports = latestReportsByStudent.get(student.preferenciasAluno?.id) || {};
+      
+      // Extrair valores dos relatórios mais recentes
+      const latestWeight = studentReports.peso ? `${studentReports.peso.valor} kg` : 'Não informado';
+      const latestHeight = studentReports.altura ? `${studentReports.altura.valor} cm` : 'Não informado';
+      
+      // Calcular IMC se tiver peso e altura
+      let imc = studentReports.IMC ? studentReports.IMC.valor : null;
+      
+      // Se não tiver IMC mas tiver peso e altura, calcular
+      if (!imc && studentReports.peso && studentReports.altura) {
+        const weightValue = studentReports.peso.valor;
+        const heightValue = studentReports.altura.valor / 100; // cm para metros
+        imc = weightValue / (heightValue * heightValue);
+        imc = parseFloat(imc.toFixed(2));
+      }
+      
+      const imcDisplay = imc ? `${imc}` : 'Não calculado';
 
       return {
         id: student.id,
         name: student.name,
         email: student.email,
         age: age || 'Não informado',
-        weight: 'Dados em relatórios',
-        height: 'Dados em relatórios',
+        weight: latestWeight,
+        height: latestHeight,
+        imc: imcDisplay,
         goal: student.preferenciasAluno?.goal || 'Não informado',
         trainingTime: student.preferenciasAluno?.experience || 'Iniciante',
         gender: student.preferenciasAluno?.gender || '',
@@ -212,7 +267,8 @@ router.get("/alunos/listar", async (req, res) => {
         experience: student.preferenciasAluno?.experience || '',
         activityLevel: student.preferenciasAluno?.activityLevel || '',
         physicalLimitations: student.preferenciasAluno?.physicalLimitations || '',
-        academiaId: student.preferenciasAluno?.academiaId
+        academiaId: student.preferenciasAluno?.academiaId,
+        imageUrl: student.preferenciasAluno?.alunoAvatar || null
       };
     });
 

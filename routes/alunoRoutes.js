@@ -832,6 +832,7 @@ router.get("/aluno/personal-responsavel", [isAluno], async (req, res) => {
       languages: personal.languages,
       instagram: personal.instagram,
       linkedin: personal.linkedin,
+      imageUrl: personal.personalAvatar || null
     };
 
     res.status(200).json(formattedPersonal);
@@ -946,6 +947,117 @@ router.get('/pagamentos/resumo', [isAluno], async (req, res) => {
   } catch (error) {
     console.error('Erro ao buscar resumo do pagamento:', error);
     return res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Obter relatórios de um aluno específico (acessível para academia, personal e o próprio aluno)
+router.get("/aluno/:alunoId/relatorios", async (req, res) => {
+  try {
+    const { alunoId } = req.params;
+    
+    // Verificar se o usuário tem permissão para acessar os relatórios deste aluno
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      include: {
+        preferenciasPersonal: true,
+        academia: true,
+        preferenciasAluno: true
+      }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
+    
+    // Verificar se o aluno existe
+    const aluno = await prisma.preferenciasAluno.findUnique({
+      where: { id: parseInt(alunoId) },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+    
+    if (!aluno) {
+      return res.status(404).json({ error: "Aluno não encontrado" });
+    }
+    
+    // Verificar permissão:
+    // 1. O próprio aluno pode ver seus relatórios
+    // 2. Academia à qual o aluno está vinculado pode ver
+    // 3. Personal responsável pelo aluno pode ver
+    const isOwnAluno = user.id === aluno.userId;
+    const isAcademia = user.role === 'ACADEMIA' && aluno.academiaId === user.academia?.id;
+    const isPersonal = user.role === 'PERSONAL' && aluno.personalId === user.preferenciasPersonal?.id;
+    
+    if (!isOwnAluno && !isAcademia && !isPersonal) {
+      return res.status(403).json({ error: "Sem permissão para acessar estes relatórios" });
+    }
+    
+    // Buscar relatórios do aluno
+    const reports = await prisma.report.findMany({
+      where: { alunoId: parseInt(alunoId) },
+      orderBy: { data: 'desc' }
+    });
+    
+    // Agrupar relatórios por tipo
+    const reportsByType = {};
+    reports.forEach(report => {
+      if (!reportsByType[report.tipo]) {
+        reportsByType[report.tipo] = [];
+      }
+      
+      reportsByType[report.tipo].push({
+        id: report.id,
+        valor: report.valor,
+        data: report.data,
+        observacao: report.observacao
+      });
+    });
+    
+    // Calcular IMC se tiver peso e altura mas não tiver relatórios de IMC
+    if (reportsByType.peso && reportsByType.altura && !reportsByType.IMC) {
+      const imcReports = [];
+      const pesosPorData = new Map();
+      
+      // Mapear pesos por data
+      reportsByType.peso.forEach(report => {
+        const data = new Date(report.data).toISOString().split('T')[0];
+        pesosPorData.set(data, report.valor);
+      });
+      
+      // Para cada altura, calcular IMC se tiver peso correspondente
+      reportsByType.altura.forEach(alturaReport => {
+        const alturaData = new Date(alturaReport.data).toISOString().split('T')[0];
+        const alturaEmMetros = alturaReport.valor / 100;
+        
+        // Verificar se há um peso registrado na mesma data
+        if (pesosPorData.has(alturaData)) {
+          const peso = pesosPorData.get(alturaData);
+          const imc = peso / (alturaEmMetros * alturaEmMetros);
+          
+          imcReports.push({
+            id: 0,
+            valor: parseFloat(imc.toFixed(2)),
+            data: alturaReport.data,
+            observacao: `Calculado automaticamente: Peso ${peso}kg, Altura ${alturaReport.valor}cm`
+          });
+        }
+      });
+      
+      if (imcReports.length > 0) {
+        reportsByType.IMC = imcReports;
+      }
+    }
+    
+    res.status(200).json(reportsByType);
+  } catch (err) {
+    console.error("Erro ao buscar relatórios:", err);
+    res.status(500).json({ error: "Erro ao buscar relatórios" });
   }
 });
 

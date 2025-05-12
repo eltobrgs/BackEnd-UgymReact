@@ -454,6 +454,7 @@ router.get("/personal/treinos", [isPersonal], async (req, res) => {
       userId: aluno.user.id,
       nome: aluno.user.name,
       email: aluno.user.email,
+      imageUrl: aluno.alunoAvatar || null,
       treinos: aluno.treinos.map(treino => ({
         id: treino.id,
         diaSemana: treino.diaSemana,
